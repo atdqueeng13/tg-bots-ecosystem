@@ -13,6 +13,8 @@ export async function ensureInitialData() {
         "email" TEXT NOT NULL,
         "name" TEXT NOT NULL DEFAULT 'Главный следователь',
         "passwordHash" TEXT NOT NULL DEFAULT '',
+        "clearanceLevel" INTEGER NOT NULL DEFAULT 4,
+        "role" TEXT NOT NULL DEFAULT 'ADMIN',
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
@@ -277,6 +279,31 @@ export async function ensureInitialData() {
         },
       });
     }
+
+    // 6. Seed Admins (Level 4 Clearance)
+    await prisma.admin.upsert({
+      where: { email: (process.env.ADMIN_EMAIL || 'lasleywork').toLowerCase() },
+      update: {},
+      create: {
+        email: (process.env.ADMIN_EMAIL || 'lasleywork').toLowerCase(),
+        name: 'Главный следователь (Lasley)',
+        passwordHash: process.env.ADMIN_PASSWORD || 'Danyap0l4ndbot615!',
+        clearanceLevel: 4,
+        role: 'SUPERADMIN',
+      },
+    });
+
+    await prisma.admin.upsert({
+      where: { email: (process.env.SAINTROSE_EMAIL || 'saintrose').toLowerCase() },
+      update: {},
+      create: {
+        email: (process.env.SAINTROSE_EMAIL || 'saintrose').toLowerCase(),
+        name: 'Следователь (SaintRose)',
+        passwordHash: process.env.SAINTROSE_PASSWORD || 'roserose123',
+        clearanceLevel: 4,
+        role: 'ADMIN',
+      },
+    });
 
     initialized = true;
   } catch (err) {

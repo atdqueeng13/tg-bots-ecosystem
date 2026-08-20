@@ -8,12 +8,23 @@ export const dynamic = 'force-dynamic';
 export default async function SettingsPage() {
   await ensureInitialData();
 
-  const [settings, keys] = await Promise.all([
+  const [settings, keys, admins] = await Promise.all([
     prisma.globalSetting.findUnique({
       where: { id: 'global' },
     }),
     prisma.geminiApiKey.findMany({
       orderBy: { createdAt: 'desc' },
+    }),
+    prisma.admin.findMany({
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        clearanceLevel: true,
+        role: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
     }),
   ]);
 
@@ -32,7 +43,11 @@ export default async function SettingsPage() {
     <>
       <Header title="Реестр Улик" badge="ГЛОБАЛЬНАЯ КОНФИГУРАЦИЯ" />
       <main className="pt-20 p-container-padding min-h-screen">
-        <SettingsClient initialSettings={settings} initialKeys={maskedKeys} />
+        <SettingsClient
+          initialSettings={settings}
+          initialKeys={maskedKeys}
+          initialAdmins={admins}
+        />
       </main>
     </>
   );

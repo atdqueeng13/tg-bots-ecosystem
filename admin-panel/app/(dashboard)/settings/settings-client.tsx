@@ -5,18 +5,30 @@ import { useState } from 'react';
 interface Props {
   initialSettings: any;
   initialKeys: any[];
+  initialAdmins?: any[];
 }
 
-export function SettingsClient({ initialSettings, initialKeys }: Props) {
+export function SettingsClient({ initialSettings, initialKeys, initialAdmins = [] }: Props) {
   const [systemPrompt, setSystemPrompt] = useState(initialSettings?.systemPrompt || '');
   const [primaryEngine, setPrimaryEngine] = useState(initialSettings?.primaryEngine || 'gemini-2.0-flash');
   const [autoFallback, setAutoFallback] = useState(initialSettings?.autoFallback ?? true);
   const [keys, setKeys] = useState(initialKeys);
+  const [admins, setAdmins] = useState(initialAdmins);
   const [saving, setSaving] = useState(false);
+
+  // Key Modal State
   const [isAddKeyModalOpen, setIsAddKeyModalOpen] = useState(false);
   const [keyName, setKeyName] = useState('');
   const [newKey, setNewKey] = useState('');
   const [addingKey, setAddingKey] = useState(false);
+
+  // Admin Modal State
+  const [isAddAdminModalOpen, setIsAddAdminModalOpen] = useState(false);
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminName, setAdminName] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminClearance, setAdminClearance] = useState('4');
+  const [addingAdmin, setAddingAdmin] = useState(false);
 
   const tokenCount = Math.ceil(systemPrompt.length / 3.8);
 
@@ -84,6 +96,54 @@ export function SettingsClient({ initialSettings, initialKeys }: Props) {
     }
   };
 
+  const handleAddAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminEmail.trim() || !adminPassword.trim()) {
+      alert('Логин и пароль обязательны');
+      return;
+    }
+
+    setAddingAdmin(true);
+    try {
+      const res = await fetch('/api/admins', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: adminEmail.trim(),
+          name: adminName.trim() || 'Оперативник Допуска Ур. 4',
+          password: adminPassword.trim(),
+          clearanceLevel: Number(adminClearance) || 4,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      // Refresh admins
+      const adminsRes = await fetch('/api/admins');
+      const adminsData = await adminsRes.json();
+      setAdmins(adminsData.admins || []);
+      setIsAddAdminModalOpen(false);
+      setAdminEmail('');
+      setAdminName('');
+      setAdminPassword('');
+      alert(`Учетная запись администратора Уровня ${adminClearance} успешно создана и сохранена в базу данных!`);
+    } catch (e: any) {
+      alert(e.message || 'Ошибка создания администратора');
+    } finally {
+      setAddingAdmin(false);
+    }
+  };
+
+  const handleDeleteAdmin = async (id: string) => {
+    if (!confirm('Отозвать допуск и удалить этого администратора?')) return;
+    try {
+      await fetch(`/api/admins?id=${id}`, { method: 'DELETE' });
+      setAdmins(admins.filter((a) => a.id !== id));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       {/* Page Header */}
@@ -93,7 +153,7 @@ export function SettingsClient({ initialSettings, initialKeys }: Props) {
             Глобальные параметры
           </h2>
           <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl text-xs leading-relaxed">
-            Настройте общесистемное поведение, основные протоколы интеграции ИИ и строгие правила повествования для всех активных досье и ботов.
+            Настройте общесистемное поведение, управление администраторами уровня 4, основные протоколы интеграции ИИ и правила повествования.
           </p>
         </div>
         <div className="flex gap-3">
@@ -110,8 +170,9 @@ export function SettingsClient({ initialSettings, initialKeys }: Props) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: System Prompt (8 cols) */}
+        {/* Left Column: System Prompt & Admins (8 cols) */}
         <div className="lg:col-span-8 space-y-6">
+          {/* System Prompt */}
           <div className="bg-surface-container rounded-lg border border-outline-variant p-6 relative overflow-hidden group shadow-xl">
             <div className="flex items-center gap-3 mb-4 pb-3 border-b border-dashed border-outline-variant">
               <span className="material-symbols-outlined text-secondary">type_specimen</span>
@@ -129,7 +190,7 @@ export function SettingsClient({ initialSettings, initialKeys }: Props) {
               <textarea
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
-                rows={12}
+                rows={10}
                 className="w-full bg-[#020617] text-tertiary font-data-mono text-xs p-4 border border-outline-variant rounded focus:border-secondary focus:ring-1 focus:ring-secondary transition-all resize-none shadow-inner leading-relaxed outline-none"
                 spellCheck={false}
               />
@@ -138,6 +199,67 @@ export function SettingsClient({ initialSettings, initialKeys }: Props) {
                   Токены: ~{tokenCount}/8192
                 </span>
               </div>
+            </div>
+          </div>
+
+          {/* Level 4 Administrators Registry Card */}
+          <div className="bg-surface-container rounded-lg border border-outline-variant p-6 relative shadow-xl">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-dashed border-outline-variant">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-outlined text-primary">verified_user</span>
+                <div>
+                  <h3 className="font-title-md text-title-md text-on-surface font-bold">
+                    Реестр Администраторов (Допуск Уровень 4)
+                  </h3>
+                  <p className="text-[11px] font-data-mono text-on-surface-variant">
+                    Аккаунты с полным доступом к управлению системой, хранящиеся в базе данных
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsAddAdminModalOpen(true)}
+                className="bg-primary-container text-white px-3 py-1.5 rounded flex items-center gap-1 font-label-caps text-[11px] tracking-widest uppercase font-bold hover:bg-primary-container/80 transition-colors"
+              >
+                <span className="material-symbols-outlined text-sm">person_add</span>
+                Создать админа
+              </button>
+            </div>
+
+            <div className="divide-y divide-outline-variant/30 font-data-mono text-xs">
+              {admins.length === 0 ? (
+                <p className="text-on-surface-variant/70 italic py-3 text-xs">
+                  Администраторы загружаются из конфигурации...
+                </p>
+              ) : (
+                admins.map((adm) => (
+                  <div key={adm.id} className="py-3 flex items-center justify-between hover:bg-surface-container-high/40 px-2 rounded transition-colors">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-on-surface">{adm.name}</span>
+                        <span className="text-[10px] bg-secondary/10 border border-secondary text-secondary px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                          Уровень {adm.clearanceLevel || 4} • Полный доступ
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-tertiary block mt-0.5">
+                        Логин: @{adm.email}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] text-on-surface-variant">
+                        {adm.createdAt ? new Date(adm.createdAt).toLocaleDateString('ru-RU') : 'Системный'}
+                      </span>
+                      <button
+                        onClick={() => handleDeleteAdmin(adm.id)}
+                        className="text-on-surface-variant hover:text-error transition-colors p-1"
+                        title="Удалить допуск"
+                      >
+                        <span className="material-symbols-outlined text-base">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -262,6 +384,98 @@ export function SettingsClient({ initialSettings, initialKeys }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Add Admin (Level 4) Modal */}
+      {isAddAdminModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-container-lowest/80 backdrop-blur-sm p-4">
+          <div className="bg-surface-container-low border border-outline-variant rounded-xl p-6 max-w-md w-full shadow-2xl relative">
+            <div className="flex justify-between items-center pb-3 border-b border-outline-variant mb-4">
+              <h3 className="font-headline-lg text-lg text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-secondary">verified_user</span>
+                Создать аккаунт администратора
+              </h3>
+              <button onClick={() => setIsAddAdminModalOpen(false)} className="text-on-surface-variant hover:text-on-surface">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleAddAdmin} className="space-y-4 font-body-md text-xs">
+              <div>
+                <label className="block font-label-caps text-[11px] text-on-surface-variant uppercase mb-1 font-bold">
+                  Логин / Email оперативника *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="agent_morozov"
+                  className="w-full bg-surface-container border border-outline-variant rounded p-2 text-xs text-on-surface outline-none focus:border-secondary font-data-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block font-label-caps text-[11px] text-on-surface-variant uppercase mb-1 font-bold">
+                  Отображаемое имя / Должность
+                </label>
+                <input
+                  type="text"
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
+                  placeholder="Следователь Морозов"
+                  className="w-full bg-surface-container border border-outline-variant rounded p-2 text-xs text-on-surface outline-none focus:border-secondary"
+                />
+              </div>
+
+              <div>
+                <label className="block font-label-caps text-[11px] text-on-surface-variant uppercase mb-1 font-bold">
+                  Пароль доступа *
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="Секретный пароль"
+                  className="w-full bg-surface-container border border-outline-variant rounded p-2 text-xs text-on-surface font-data-mono outline-none focus:border-secondary"
+                />
+              </div>
+
+              <div>
+                <label className="block font-label-caps text-[11px] text-on-surface-variant uppercase mb-1 font-bold">
+                  Уровень допуска
+                </label>
+                <select
+                  value={adminClearance}
+                  onChange={(e) => setAdminClearance(e.target.value)}
+                  className="w-full bg-surface-container border border-outline-variant rounded p-2 text-xs text-secondary font-data-mono outline-none focus:border-secondary font-bold"
+                >
+                  <option value="4">УРОВЕНЬ 4 — ПОЛНЫЙ ДОСТУП (Super Admin)</option>
+                  <option value="3">УРОВЕНЬ 3 — СЛЕДОВАТЕЛЬ (Чтение / Редактирование ботов)</option>
+                  <option value="2">УРОВЕНЬ 2 — АРХИВАРИУС (Только просмотр данных)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-outline-variant">
+                <button
+                  type="button"
+                  onClick={() => setIsAddAdminModalOpen(false)}
+                  className="px-4 py-2 text-on-surface-variant hover:text-on-surface text-xs"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingAdmin}
+                  className="px-5 py-2 bg-secondary text-surface-container-lowest rounded font-bold text-xs hover:bg-secondary-fixed-dim transition-colors flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-sm">check</span>
+                  {addingAdmin ? 'Сохранение...' : 'Создать и сохранить в БД'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Add API Key Modal */}
       {isAddKeyModalOpen && (

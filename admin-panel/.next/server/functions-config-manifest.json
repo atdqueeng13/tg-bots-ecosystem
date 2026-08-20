@@ -1,1 +1,1 @@
-{"version":1,"functions":{"/bots":{},"/bots/[id]":{},"/groups":{},"/broadcasts":{},"/users":{},"/settings":{},"/":{}}}
+{"version":1,"functions":{"/bots":{},"/broadcasts":{},"/bots/[id]":{},"/groups":{},"/":{},"/settings":{},"/users":{}}}

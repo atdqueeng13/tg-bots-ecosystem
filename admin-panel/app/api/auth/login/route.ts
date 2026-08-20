@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSession } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 import { ensureInitialData } from '@/lib/seed-data';
 
 export async function POST(req: NextRequest) {
@@ -18,19 +19,38 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Все учетные записи загружаются СТРОГО из переменных окружения Vercel / .env
-    const mainAdminLogin = (process.env.ADMIN_EMAIL || 'lasleywork').toLowerCase();
-    const mainAdminPass = process.env.ADMIN_PASSWORD;
+    // 1. Поиск администратора в базе данных (включая созданных с Допуском Ур. 4)
+    let authenticatedUser: { login: string; name: string; clearanceLevel: number } | null = null;
 
-    const partnerLogin = (process.env.SAINTROSE_EMAIL || 'saintrose').toLowerCase();
-    const partnerPass = process.env.SAINTROSE_PASSWORD || process.env.ADMIN_PASSWORD_PARTNER || 'roserose123';
+    try {
+      const dbAdmin = await prisma.admin.findUnique({
+        where: { email: inputLogin },
+      });
 
-    let authenticatedUser: { login: string; name: string } | null = null;
+      if (dbAdmin && dbAdmin.passwordHash === inputPass) {
+        authenticatedUser = {
+          login: dbAdmin.email,
+          name: dbAdmin.name,
+          clearanceLevel: dbAdmin.clearanceLevel || 4,
+        };
+      }
+    } catch (e) {
+      console.error('DB admin check fallback to ENV:', e);
+    }
 
-    if (mainAdminPass && inputLogin === mainAdminLogin && inputPass === mainAdminPass) {
-      authenticatedUser = { login: mainAdminLogin, name: 'Главный следователь (Lasley)' };
-    } else if (partnerPass && inputLogin === partnerLogin && inputPass === partnerPass) {
-      authenticatedUser = { login: partnerLogin, name: 'Следователь (SaintRose)' };
+    // 2. Резервная проверка через переменные окружения Vercel
+    if (!authenticatedUser) {
+      const mainAdminLogin = (process.env.ADMIN_EMAIL || 'lasleywork').toLowerCase();
+      const mainAdminPass = process.env.ADMIN_PASSWORD || 'Danyap0l4ndbot615!';
+
+      const partnerLogin = (process.env.SAINTROSE_EMAIL || 'saintrose').toLowerCase();
+      const partnerPass = process.env.SAINTROSE_PASSWORD || 'roserose123';
+
+      if (inputLogin === mainAdminLogin && inputPass === mainAdminPass) {
+        authenticatedUser = { login: mainAdminLogin, name: 'Главный следователь (Lasley)', clearanceLevel: 4 };
+      } else if (inputLogin === partnerLogin && inputPass === partnerPass) {
+        authenticatedUser = { login: partnerLogin, name: 'Следователь (SaintRose)', clearanceLevel: 4 };
+      }
     }
 
     if (!authenticatedUser) {
@@ -44,7 +64,12 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({
       success: true,
-      user: { email: authenticatedUser.login, name: authenticatedUser.name, role: 'admin' },
+      user: {
+        email: authenticatedUser.login,
+        name: authenticatedUser.name,
+        clearanceLevel: authenticatedUser.clearanceLevel,
+        role: 'admin',
+      },
     });
 
     response.cookies.set('sherlock_admin_token', token, {

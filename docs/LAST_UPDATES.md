@@ -11,17 +11,30 @@
 
 ## 📜 Хронология обновлений:
 
-### 🗓️ 2026-08-20 16:10 — Интеграция Firebase Realtime Database (`sherlock-ec772-default-rtdb`)
+### 🗓️ 2026-08-20 16:28 — Система создания аккаунтов администраторов Уровня 4 (Полный доступ) в Базе Данных
 * **Автор / Агент:** Antigravity AI (для @atdqueeng13 & @saintrosexi)
 * **Ветка:** `main` (Live на Vercel: `https://admin-panel-gilt-three.vercel.app`)
 * **Что сделано:**
-  1. Подключен указанный URL базы данных: `https://sherlock-ec772-default-rtdb.firebaseio.com`.
-  2. Добавлен модуль синхронизации `syncToFirebaseRTDB` в `admin-panel/lib/firebase.ts`.
-  3. Настроена автоматическая прямая синхронизация всех пользователей (`/users`) и логов диалогов (`/dialogues`) в Firebase Realtime Database в реальном времени.
+  1. Добавлена полноценная система управления администраторами с уровнями доступа (Уровень 4 — Полный доступ, Уровень 3, Уровень 2).
+  2. Добавлен API `/api/admins` (CRUD для создания, получения и удаления администраторов с сохранением в БД и зеркалированием в Firebase).
+  3. В интерфейс «Настройки» (`/settings`) добавлен блок «Реестр Администраторов (Допуск Уровень 4)» и модальное окно создания новых администраторов.
+  4. Авторизация (`/login`) теперь динамически проверяет пользователей напрямую из базы данных.
 * **Затронутые файлы:**
-  - `admin-panel/lib/firebase.ts`
-  - `admin-panel/app/api/bot-runtime/dialogue/route.ts`
+  - `admin-panel/prisma/schema.prisma`
+  - `admin-panel/app/api/admins/route.ts`
+  - `admin-panel/app/api/auth/login/route.ts`
+  - `admin-panel/app/(dashboard)/settings/page.tsx` & `settings-client.tsx`
+  - `admin-panel/lib/seed-data.ts`
   - `docs/LAST_UPDATES.md`
+
+---
+
+### 🗓️ 2026-08-20 16:10 — Интеграция Firebase Realtime Database (`sherlock-ec772-default-rtdb`)
+* **Автор / Агент:** Antigravity AI (для @atdqueeng13 & @saintrosexi)
+* **Ветка:** `main`
+* **Что сделано:**
+  1. Подключен URL базы данных `https://sherlock-ec772-default-rtdb.firebaseio.com`.
+  2. Настроена синхронизация пользователей и диалогов в реальном времени.
 
 ---
 
@@ -29,14 +42,4 @@
 * **Автор / Агент:** Antigravity AI
 * **Ветка:** `main`
 * **Что сделано:**
-  1. В правила всех ИИ (`.cursorrules`, `.windsurfrules`, `AGENT_RULES.md`) добавлено требование перед началом работы читать `docs/LAST_UPDATES.md` и выводить сводку «Кстати, вот изменения, которые вносил другой разработчик...».
-
----
-
-### 🗓️ 2026-08-20 15:35 — Развертывание Sherlock Admin V2 на Vercel, Мульти-аккаунты & Firebase
-* **Автор / Агент:** Antigravity AI (для @atdqueeng13 & @saintrosexi)
-* **Ветка:** `main`
-* **Что сделано:**
-  1. Полностью собрана и задеплоена панель управления **Sherlock Admin (V2)** на Next.js 14.
-  2. Настроены 2 аккаунта: `lasleywork` / `Danyap0l4ndbot615!` и `saintrose` / `roserose123`.
-  3. Пул ротации Gemini API (`2.0-flash`, `1.5-pro`), карточки ботов, общий лор групп, рассылки.
+  1. В правила всех ИИ добавлено требование выводить сводку «Кстати, вот изменения...».
