@@ -1,24 +1,20 @@
-# 🤖 AI AGENT COLLABORATION & SYNCHRONIZATION RULES
+# 🤖 ПРАВИЛА ДЛЯ ВСЕХ ИИ-АГЕНТОВ (CURSOR, WINDSURF, CLAUDE, COPILOT, ANTIGRAVITY)
 
-You are an AI coding assistant working on the **Telegram Bots Ecosystem & Sherlock Admin** project.
-Multiple developers and AI agents collaborate on this codebase.
+## 🚨 ОБЯЗАТЕЛЬНЫЙ ПРОТОКОЛ СИНХРОНИЗАЦИИ И ОТВЕТА ПОЛЬЗОВАТЕЛЮ:
 
-## 🚨 MANDATORY PROTOCOLS:
+### 1. ПЕРЕД НАЧАЛОМ РАБОТЫ (ОБЯЗАТЕЛЬНО):
+Перед выполнением любой задачи или ответом пользователю вы **ОБЯЗАНЫ**:
+1. Прочитать файл `docs/LAST_UPDATES.md`.
+2. **В своем ответе пользователю обязательно явно написать:**
+   > **«Кстати, вот последние изменения, которые вносил другой разработчик:**
+   > 1. [Краткое описание изменения 1]
+   > 2. [Краткое описание изменения 2]
+   > 3. ...**»**
 
-### 1. Pre-flight Check (BEFORE ANY TASK):
-- ALWAYS read `docs/LAST_UPDATES.md` before starting to plan or write code.
-- Understand what the other developer / AI recently implemented, what models exist, and what database schemas are active.
-- Read `docs/ARCHITECTURE.md` and `admin-panel/prisma/schema.prisma` if relevant to your task.
+### 2. В ПРОЦЕССЕ РАБОТЫ:
+- Следуйте архитектуре из `docs/ARCHITECTURE.md` и базе данных в `admin-panel/prisma/schema.prisma`.
+- Сохраняйте темный графитовый дизайн Sherlock Admin V2 (`#0b1326`, `#dae2fd`, `#f59e0b`).
+- Не коммитьте `.env` и секретные ключи.
 
-### 2. Implementation Conventions:
-- Theme & Style: Follow the dark graphite + amber Sherlock Admin V2 design system (`#0b1326`, `#dae2fd`, `#f59e0b`, `#ffb4ac`, `Playfair Display`, `Inter`, `JetBrains Mono`).
-- Multi-bot support: All bot prompts, group lores, and Gemini API keys are dynamically retrieved from the backend (`/api/bot-runtime/config` and `/api/bot-runtime/dialogue`).
-- Never commit `.env` or plain-text secrets to Git.
-
-### 3. Post-flight Logging (AFTER COMPLETING ANY TASK):
-- ALWAYS update `docs/LAST_UPDATES.md` with a new entry at the very top describing:
-  - Timestamp & Author
-  - Branch name
-  - Summary of changes
-  - List of modified/created files
-  - Important notes for the other teammate
+### 3. ПОСЛЕ ЗАВЕРШЕНИЯ РАБОТЫ (ОБЯЗАТЕЛЬНО):
+Добавьте новую запись в самый верх `docs/LAST_UPDATES.md` с датой, автором, списком изменений и затронутых файлов.
