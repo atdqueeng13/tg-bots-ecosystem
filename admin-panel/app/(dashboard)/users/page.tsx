@@ -1,0 +1,30 @@
+import { prisma } from '@/lib/prisma';
+import { ensureInitialData } from '@/lib/seed-data';
+import { Header } from '@/components/Header';
+import { UsersClient } from './users-client';
+
+export const dynamic = 'force-dynamic';
+
+export default async function UsersPage() {
+  await ensureInitialData();
+
+  const users = await prisma.telegramUser.findMany({
+    include: {
+      dialogues: {
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+        include: { bot: true },
+      },
+    },
+    orderBy: { lastActive: 'desc' },
+  });
+
+  return (
+    <>
+      <Header title="Реестр улик" badge="СУБЪЕКТЫ" />
+      <main className="pt-20 px-container-padding pb-20 min-h-screen">
+        <UsersClient initialUsers={users} />
+      </main>
+    </>
+  );
+}

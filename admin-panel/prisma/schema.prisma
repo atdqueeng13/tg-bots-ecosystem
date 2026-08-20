@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String   @default("Главный следователь")
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Bot {
+  id               String            @id @default(uuid())
+  botId            String            @unique // e.g. "BR-8921", "bot_01"
+  name             String // e.g. "Oracle-7", "Orion-X"
+  token            String // Telegram bot token
+  avatarUrl        String?
+  role             String            @default("Главный персонаж")
+  status           String            @default("ACTIVE") // ACTIVE, OFFLINE, ERROR
+  isActive         Boolean           @default(true)
+  lastPing         DateTime?
+  groupId          String?
+  group            Group?            @relation(fields: [groupId], references: [id])
+  model            String            @default("gemini-2.0-flash")
+  temperature      Float             @default(0.7)
+  reasoningEnabled Boolean           @default(false)
+  legend           String? // Публичная легенда
+  knowledge        String? // База знаний
+  secrets          String? // Секретные данные
+  character        String? // Характер / особенности речи
+  triggers         String? // Поведенческие триггеры
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  dialogues        UserDialogueLog[]
+}
+
+model Group {
+  id        String   @id @default(uuid())
+  code      String   @unique // e.g. "742-ALPHA", "089-OMEGA"
+  title     String // e.g. "Смерть на приёме", "Операция: Сумерки"
+  status    String   @default("ACTIVE") // ACTIVE, ARCHIVED
+  reward    String?  @default("$4,500")
+  lore      String // Краткий контекст / общий лор
+  coverUrl  String?
+  bots      Bot[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TelegramUser {
+  id            String            @id @default(uuid())
+  telegramId    String            @unique
+  username      String?
+  firstName     String?
+  lastName      String?
+  status        String            @default("ACTIVE") // ACTIVE, INACTIVE, BLOCKED
+  firstSeen     DateTime          @default(now())
+  lastActive    DateTime          @default(now())
+  dialogueCount Int               @default(0)
+  tokensUsed    Int               @default(0)
+  casesAccessed String?           @default("[]") // JSON string of case codes
+  spentAmount   Float             @default(0.0)
+  dialogues     UserDialogueLog[]
+}
+
+model UserDialogueLog {
+  id          String       @id @default(uuid())
+  userId      String
+  user        TelegramUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  botId       String
+  bot         Bot          @relation(fields: [botId], references: [id], onDelete: Cascade)
+  userMessage String
+  botResponse String
+  modelUsed   String       @default("gemini-2.0-flash")
+  tokens      Int          @default(0)
+  status      String       @default("SUCCESS") // SUCCESS, FLAGGED, ERROR
+  createdAt   DateTime     @default(now())
+}
+
+model GeminiApiKey {
+  id           String    @id @default(uuid())
+  name         String    @default("Gemini Key")
+  key          String // Secret API Key
+  status       String    @default("ACTIVE") // ACTIVE, EXHAUSTED, COOLDOWN, ERROR
+  latencyMs    Int       @default(120)
+  requestCount Int       @default(0)
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Broadcast {
+  id          String    @id @default(uuid())
+  code        String    @unique // e.g. "BC-8892"
+  message     String
+  mediaUrl    String?
+  audience    String    @default("ALL") // ALL, CASE:742-ALPHA, INACTIVE
+  status      String    @default("DELIVERED") // SCHEDULED, DELIVERED, ERROR
+  sentCount   Int       @default(0)
+  totalTarget Int       @default(0)
+  scheduledAt DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model GlobalSetting {
+  id            String   @id @default("global")
+  systemPrompt  String
+  primaryEngine String   @default("gemini-2.0-flash")
+  autoFallback  Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
+}
