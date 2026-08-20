@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateWithGemini } from '@/lib/gemini-rotator';
+import { syncToFirebaseRTDB } from '@/lib/firebase';
 
 export async function POST(req: NextRequest) {
   try {
@@ -119,6 +120,23 @@ export async function POST(req: NextRequest) {
     await prisma.bot.update({
       where: { id: bot.id },
       data: { lastPing: new Date() },
+    });
+
+    // 8. Mirror to Firebase Realtime Database
+    syncToFirebaseRTDB(`users/${telegramId}`, {
+      telegramId: String(telegramId),
+      username: username || null,
+      firstName: firstName || null,
+      lastActive: new Date().toISOString(),
+      lastBot: bot.name,
+    });
+
+    syncToFirebaseRTDB(`dialogues/${log.id}`, {
+      telegramId: String(telegramId),
+      botName: bot.name,
+      userMessage,
+      botResponse: finalResponse,
+      timestamp: new Date().toISOString(),
     });
 
     return NextResponse.json({

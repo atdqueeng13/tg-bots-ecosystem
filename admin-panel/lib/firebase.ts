@@ -1,5 +1,13 @@
 import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
+import { getDatabase, Database } from 'firebase-admin/database';
+
+export const FIREBASE_DATABASE_URL =
+  process.env.FIREBASE_DATABASE_URL ||
+  'https://sherlock-ec772-default-rtdb.firebaseio.com';
+
+export const FIREBASE_PROJECT_ID =
+  process.env.FIREBASE_PROJECT_ID || 'sherlock-ec772';
 
 function getFirebaseCredentials() {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
@@ -12,12 +20,11 @@ function getFirebaseCredentials() {
   }
 
   if (
-    process.env.FIREBASE_PROJECT_ID &&
     process.env.FIREBASE_CLIENT_EMAIL &&
     process.env.FIREBASE_PRIVATE_KEY
   ) {
     return cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
+      projectId: FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
       privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
     });
@@ -31,13 +38,12 @@ let app: App | undefined;
 export function initFirebase(): App | null {
   if (!getApps().length) {
     const credential = getFirebaseCredentials();
-    if (credential) {
-      app = initializeApp({
-        credential,
-        projectId: process.env.FIREBASE_PROJECT_ID,
-      });
-      console.log('🔥 Firebase Admin SDK initialized successfully!');
-    }
+    app = initializeApp({
+      credential: credential || undefined,
+      projectId: FIREBASE_PROJECT_ID,
+      databaseURL: FIREBASE_DATABASE_URL,
+    });
+    console.log('🔥 Firebase Admin SDK initialized for project:', FIREBASE_PROJECT_ID);
   } else {
     app = getApps()[0];
   }
@@ -51,3 +57,28 @@ export const firestore = (): Firestore | null => {
   }
   return null;
 };
+
+export const realtimeDb = (): Database | null => {
+  const initializedApp = initFirebase();
+  if (initializedApp) {
+    return getDatabase(initializedApp);
+  }
+  return null;
+};
+
+/**
+ * Утилита прямой записи в Firebase Realtime Database по REST API
+ */
+export async function syncToFirebaseRTDB(path: string, data: any) {
+  try {
+    const cleanPath = path.replace(/^\/+/, '').replace(/\.json$/, '');
+    const url = `${FIREBASE_DATABASE_URL}/${cleanPath}.json`;
+    await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  } catch (err) {
+    console.error(`Firebase RTDB sync error for ${path}:`, err);
+  }
+}

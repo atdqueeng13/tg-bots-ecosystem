@@ -1,4 +1,108 @@
-"use strict";(()=>{var e={};e.id=668,e.ids=[668],e.modules={3524:e=>{e.exports=require("@prisma/client")},2934:e=>{e.exports=require("next/dist/client/components/action-async-storage.external.js")},4580:e=>{e.exports=require("next/dist/client/components/request-async-storage.external.js")},5869:e=>{e.exports=require("next/dist/client/components/static-generation-async-storage.external.js")},399:e=>{e.exports=require("next/dist/compiled/next-server/app-page.runtime.prod.js")},517:e=>{e.exports=require("next/dist/compiled/next-server/app-route.runtime.prod.js")},2254:e=>{e.exports=require("node:buffer")},6005:e=>{e.exports=require("node:crypto")},7261:e=>{e.exports=require("node:util")},1412:(e,t,a)=>{a.r(t),a.d(t,{originalPathname:()=>A,patchFetch:()=>f,requestAsyncStorage:()=>m,routeModule:()=>g,serverHooks:()=>w,staticGenerationAsyncStorage:()=>h});var r={};a.r(r),a.d(r,{GET:()=>c,PUT:()=>p});var s=a(9303),o=a(8716),n=a(670),i=a(7070),u=a(2331),d=a(9178),l=a(2957);async function c(e){try{if(await (0,l.R)(),!await (0,d.Z9)(e))return i.NextResponse.json({error:"Unauthorized"},{status:401});let t=await u._.globalSetting.findUnique({where:{id:"global"}});return i.NextResponse.json({settings:t})}catch(e){return i.NextResponse.json({error:e?.message},{status:500})}}async function p(e){try{if(!await (0,d.Z9)(e))return i.NextResponse.json({error:"Unauthorized"},{status:401});let{systemPrompt:t,primaryEngine:a,autoFallback:r}=await e.json(),s=await u._.globalSetting.upsert({where:{id:"global"},update:{...void 0!==t&&{systemPrompt:t},...void 0!==a&&{primaryEngine:a},...void 0!==r&&{autoFallback:r}},create:{id:"global",systemPrompt:t||"",primaryEngine:a||"gemini-2.0-flash",autoFallback:void 0===r||r}});return i.NextResponse.json({settings:s})}catch(e){return i.NextResponse.json({error:e?.message},{status:500})}}let g=new s.AppRouteRouteModule({definition:{kind:o.x.APP_ROUTE,page:"/api/settings/route",pathname:"/api/settings",filename:"route",bundlePath:"app/api/settings/route"},resolvedPagePath:"C:\\game1\\admin-panel\\app\\api\\settings\\route.ts",nextConfigOutput:"",userland:r}),{requestAsyncStorage:m,staticGenerationAsyncStorage:h,serverHooks:w}=g,A="/api/settings/route";function f(){return(0,n.patchFetch)({serverHooks:w,staticGenerationAsyncStorage:h})}},9178:(e,t,a)=>{a.d(t,{Gg:()=>l,Z9:()=>c,ed:()=>u,vK:()=>p});var r=a(6091),s=a(6176),o=a(1615);let n=new TextEncoder().encode(process.env.JWT_SECRET||"sherlock-admin-secret-key-2026-very-secure-jwt-token-alpha"),i="sherlock_admin_token";async function u(e,t="Главный следователь"){return await new r.N({email:e,name:t,role:"admin"}).setProtectedHeader({alg:"HS256"}).setIssuedAt().setExpirationTime("7d").sign(n)}async function d(e){try{return(await (0,s._)(e,n)).payload}catch{return null}}async function l(){let e=(0,o.cookies)(),t=e.get(i)?.value;return t?await d(t):null}async function c(e){let t=e.cookies.get(i)?.value;if(!t){let t=e.headers.get("Authorization");return t&&t.startsWith("Bearer ")?await d(t.substring(7)):null}return await d(t)}function p(){return{email:process.env.ADMIN_EMAIL||"admin@registry.gov",password:process.env.ADMIN_PASSWORD||"sherlock2026"}}},2331:(e,t,a)=>{a.d(t,{_:()=>s});var r=a(3524);let s=globalThis.prisma??new r.PrismaClient({log:["error"]})},2957:(e,t,a)=>{a.d(t,{R:()=>s});var r=a(2331);async function s(){try{await r._.globalSetting.findUnique({where:{id:"global"}})||await r._.globalSetting.create({data:{id:"global",primaryEngine:"gemini-2.0-flash",autoFallback:!0,systemPrompt:`Вы работаете в рамках детективно-игровой системы 'Реестр Улик'.
+"use strict";(()=>{var e={};e.id=668,e.ids=[668],e.modules={3524:e=>{e.exports=require("@prisma/client")},2934:e=>{e.exports=require("next/dist/client/components/action-async-storage.external.js")},4580:e=>{e.exports=require("next/dist/client/components/request-async-storage.external.js")},5869:e=>{e.exports=require("next/dist/client/components/static-generation-async-storage.external.js")},399:e=>{e.exports=require("next/dist/compiled/next-server/app-page.runtime.prod.js")},517:e=>{e.exports=require("next/dist/compiled/next-server/app-route.runtime.prod.js")},2254:e=>{e.exports=require("node:buffer")},6005:e=>{e.exports=require("node:crypto")},7261:e=>{e.exports=require("node:util")},1412:(e,t,a)=>{a.r(t),a.d(t,{originalPathname:()=>c,patchFetch:()=>p,requestAsyncStorage:()=>U,routeModule:()=>u,serverHooks:()=>l,staticGenerationAsyncStorage:()=>d});var T={};a.r(T),a.d(T,{GET:()=>L,PUT:()=>A});var r=a(9303),s=a(8716),E=a(670),n=a(7070),i=a(2331),o=a(9178),N=a(2957);async function L(e){try{if(await (0,N.R)(),!await (0,o.Z9)(e))return n.NextResponse.json({error:"Unauthorized"},{status:401});let t=await i._.globalSetting.findUnique({where:{id:"global"}});return n.NextResponse.json({settings:t})}catch(e){return n.NextResponse.json({error:e?.message},{status:500})}}async function A(e){try{if(!await (0,o.Z9)(e))return n.NextResponse.json({error:"Unauthorized"},{status:401});let{systemPrompt:t,primaryEngine:a,autoFallback:T}=await e.json(),r=await i._.globalSetting.upsert({where:{id:"global"},update:{...void 0!==t&&{systemPrompt:t},...void 0!==a&&{primaryEngine:a},...void 0!==T&&{autoFallback:T}},create:{id:"global",systemPrompt:t||"",primaryEngine:a||"gemini-2.0-flash",autoFallback:void 0===T||T}});return n.NextResponse.json({settings:r})}catch(e){return n.NextResponse.json({error:e?.message},{status:500})}}let u=new r.AppRouteRouteModule({definition:{kind:s.x.APP_ROUTE,page:"/api/settings/route",pathname:"/api/settings",filename:"route",bundlePath:"app/api/settings/route"},resolvedPagePath:"C:\\game1\\admin-panel\\app\\api\\settings\\route.ts",nextConfigOutput:"",userland:T}),{requestAsyncStorage:U,staticGenerationAsyncStorage:d,serverHooks:l}=u,c="/api/settings/route";function p(){return(0,E.patchFetch)({serverHooks:l,staticGenerationAsyncStorage:d})}},9178:(e,t,a)=>{a.d(t,{Gg:()=>N,Z9:()=>L,ed:()=>i});var T=a(6091),r=a(6176),s=a(1615);let E=new TextEncoder().encode(process.env.JWT_SECRET||"sherlock-admin-secret-key-2026-very-secure-jwt-token-alpha"),n="sherlock_admin_token";async function i(e,t="Главный следователь"){return await new T.N({email:e,name:t,role:"admin"}).setProtectedHeader({alg:"HS256"}).setIssuedAt().setExpirationTime("7d").sign(E)}async function o(e){try{return(await (0,r._)(e,E)).payload}catch{return null}}async function N(){let e=(0,s.cookies)(),t=e.get(n)?.value;return t?await o(t):null}async function L(e){let t=e.cookies.get(n)?.value;if(!t){let t=e.headers.get("Authorization");return t&&t.startsWith("Bearer ")?await o(t.substring(7)):null}return await o(t)}},2331:(e,t,a)=>{a.d(t,{_:()=>r});var T=a(3524);let r=globalThis.prisma??new T.PrismaClient({log:["error"]})},2957:(e,t,a)=>{a.d(t,{R:()=>s});var T=a(2331);let r=!1;async function s(){if(!r)try{await T._.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Admin" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "email" TEXT NOT NULL,
+        "name" TEXT NOT NULL DEFAULT 'Главный следователь',
+        "passwordHash" TEXT NOT NULL DEFAULT '',
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `),await T._.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "Admin_email_key" ON "Admin"("email");'),await T._.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Group" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "code" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+        "reward" TEXT DEFAULT '$4,500',
+        "lore" TEXT NOT NULL,
+        "coverUrl" TEXT,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `),await T._.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "Group_code_key" ON "Group"("code");'),await T._.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Bot" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "botId" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "token" TEXT NOT NULL,
+        "avatarUrl" TEXT,
+        "role" TEXT NOT NULL DEFAULT 'Главный персонаж',
+        "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "lastPing" DATETIME,
+        "groupId" TEXT,
+        "model" TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
+        "temperature" REAL NOT NULL DEFAULT 0.7,
+        "reasoningEnabled" BOOLEAN NOT NULL DEFAULT false,
+        "legend" TEXT,
+        "knowledge" TEXT,
+        "secrets" TEXT,
+        "character" TEXT,
+        "triggers" TEXT,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `),await T._.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "Bot_botId_key" ON "Bot"("botId");'),await T._.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "TelegramUser" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "telegramId" TEXT NOT NULL,
+        "username" TEXT,
+        "firstName" TEXT,
+        "lastName" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+        "firstSeen" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "lastActive" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "dialogueCount" INTEGER NOT NULL DEFAULT 0,
+        "tokensUsed" INTEGER NOT NULL DEFAULT 0,
+        "casesAccessed" TEXT DEFAULT '[]',
+        "spentAmount" REAL NOT NULL DEFAULT 0.0
+      );
+    `),await T._.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "TelegramUser_telegramId_key" ON "TelegramUser"("telegramId");'),await T._.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "UserDialogueLog" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "botId" TEXT NOT NULL,
+        "userMessage" TEXT NOT NULL,
+        "botResponse" TEXT NOT NULL,
+        "modelUsed" TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
+        "tokens" INTEGER NOT NULL DEFAULT 0,
+        "status" TEXT NOT NULL DEFAULT 'SUCCESS',
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `),await T._.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "GeminiApiKey" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "name" TEXT NOT NULL DEFAULT 'Gemini Key',
+        "key" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+        "latencyMs" INTEGER NOT NULL DEFAULT 120,
+        "requestCount" INTEGER NOT NULL DEFAULT 0,
+        "lastUsedAt" DATETIME,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `),await T._.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Broadcast" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "code" TEXT NOT NULL,
+        "message" TEXT NOT NULL,
+        "mediaUrl" TEXT,
+        "audience" TEXT NOT NULL DEFAULT 'ALL',
+        "status" TEXT NOT NULL DEFAULT 'DELIVERED',
+        "sentCount" INTEGER NOT NULL DEFAULT 0,
+        "totalTarget" INTEGER NOT NULL DEFAULT 0,
+        "scheduledAt" DATETIME,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `),await T._.$executeRawUnsafe('CREATE UNIQUE INDEX IF NOT EXISTS "Broadcast_code_key" ON "Broadcast"("code");'),await T._.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "GlobalSetting" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "systemPrompt" TEXT NOT NULL,
+        "primaryEngine" TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
+        "autoFallback" BOOLEAN NOT NULL DEFAULT true,
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `),await T._.globalSetting.findUnique({where:{id:"global"}})||await T._.globalSetting.create({data:{id:"global",primaryEngine:"gemini-2.0-flash",autoFallback:!0,systemPrompt:`Вы работаете в рамках детективно-игровой системы 'Реестр Улик'.
 Ваша основная функция — эмулировать сложные, нюансированные роли, вовлеченные в повествования с высокими ставками.
 
 ОГРАНИЧЕНИЯ:
@@ -9,4 +113,4 @@
 5. Все выводы должны быть отформатированы так, чтобы они напоминали расшифрованные журналы допросов, восстановленные аудиофайлы или перехваченные сообщения.
 
 ОКРУЖАЮЩИЙ КОНТЕКСТ:
-Сеттинг — современный нео-нуар. Информации мало. Доверие минимально.`}});let e=await r._.group.upsert({where:{code:"742-ALPHA"},update:{},create:{code:"742-ALPHA",title:"Смерть на приёме",status:"ACTIVE",reward:"$4,500",coverUrl:"https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop",lore:"Высокопоставленный дипломат был найден мертвым во время эксклюзивного приема в Гранд-посольстве. Первоначальные отчеты указывают на отравление. В настоящее время всем гостям запрещено покидать территорию."}}),t=await r._.group.upsert({where:{code:"089-OMEGA"},update:{},create:{code:"089-OMEGA",title:"Операция: Сумерки",status:"ACTIVE",reward:"$12,000",coverUrl:"https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=800&auto=format&fit=crop",lore:"Утечка закрытых протоколов кибер-безопасности корпорации OmniCorp. В сети обнаружены следы автономного агента, выкачивающего засекреченные архивы."}});await r._.bot.upsert({where:{botId:"BR-8921"},update:{},create:{botId:"BR-8921",name:"Orion-X",token:"7123456789:AAFakeTokenOrionX_Example1",avatarUrl:"https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop",role:"Главный антагонист / Информатор",status:"ACTIVE",isActive:!0,groupId:e.id,model:"gemini-2.0-flash",temperature:.7,reasoningEnabled:!0,legend:"Известен как высокоуровневый корпоративный посредник и фиксер, действующий в секторе Нео-Берлин. Имеет репутацию безжалостной эффективности и абсолютной скрытности.",knowledge:"Обширные знания о тактике корпоративного шпионажа, ценах на черном рынке киберимплантов и внутренней структуре OmniCorp. Не знает точное местоположение базы повстанцев.",secrets:'На самом деле является двойным агентом, работающим на Сопротивление. Раскрывает это только при предъявлении кодовой фразы "Crimson Dawn".',character:"Говорит короткими, четкими фразами. Корпоративный жаргон использует умеренно. Никогда не выказывает сомнений. Тон холодный, аналитический, слегка циничный.",triggers:'ЕСЛИ пользователь упоминает "Проект Икар" -> немедленно прекратить беседу и записать тревогу. ЕСЛИ предлагает кредиты -> вежливо отклонить, но зафиксировать попытку подкупа.'}}),await r._.bot.upsert({where:{botId:"BR-4432"},update:{},create:{botId:"BR-4432",name:"Oracle-7",token:"7123456789:AAFakeTokenOracle7_Example2",avatarUrl:"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop",role:"Архивариус / Криминалист",status:"ACTIVE",isActive:!0,groupId:t.id,model:"gemini-2.0-flash",temperature:.4,reasoningEnabled:!1,legend:"Старший аналитик судебно-медицинской экспертизы.",knowledge:"Доступ к базе отпечатков пальцев, токсикологическим экспертизам.",character:"Говорит вежливо, методично, оперирует фактами и временными метками."}});let a=await r._.telegramUser.upsert({where:{telegramId:"98402911"},update:{},create:{telegramId:"98402911",username:"john_doe_99",firstName:"Джонатан",lastName:"Доу",status:"ACTIVE",dialogueCount:42,tokensUsed:14200,spentAmount:45,casesAccessed:JSON.stringify(["742-ALPHA","089-OMEGA"])}});await r._.telegramUser.upsert({where:{telegramId:"11930422"},update:{},create:{telegramId:"11930422",username:"cipher_x",firstName:"Алиса",lastName:"Смит",status:"ACTIVE",dialogueCount:19,tokensUsed:6800,spentAmount:15,casesAccessed:JSON.stringify(["742-ALPHA"])}});let s=await r._.bot.findUnique({where:{botId:"BR-8921"}});s&&!await r._.userDialogueLog.findFirst({where:{userId:a.id}})&&await r._.userDialogueLog.create({data:{userId:a.id,botId:s.id,userMessage:"Кто стоял у входа в архив в 21:00?",botResponse:"[ПРОТОКОЛ ДОПРОСА #849]: Записи камер повреждены, однако в журнале регистрации числится пропуск с идентификатором посла Волкова.",modelUsed:"gemini-2.0-flash",tokens:142,status:"SUCCESS"}}),await r._.broadcast.findFirst()||await r._.broadcast.create({data:{code:"BC-8892",message:"Внимание всем агентам: получены новые данные по делу 742-ALPHA. Проверьте реестр улик.",audience:"Дело: 742-ALPHA",status:"DELIVERED",sentCount:148,totalTarget:148}}),await r._.geminiApiKey.findFirst()||await r._.geminiApiKey.create({data:{name:"Gemini Primary (Default)",key:process.env.GEMINI_API_KEY||"AIzaSyDemoKey-SetYourOwnInSettings",status:"ACTIVE",latencyMs:135,requestCount:12}})}catch(e){console.error("Initial data seed error:",e)}}}};var t=require("../../../webpack-runtime.js");t.C(e);var a=e=>t(t.s=e),r=t.X(0,[276,840,972],()=>a(1412));module.exports=r})();
+Сеттинг — современный нео-нуар. Информации мало. Доверие минимально.`}});let e=await T._.group.upsert({where:{code:"742-ALPHA"},update:{},create:{code:"742-ALPHA",title:"Смерть на приёме",status:"ACTIVE",reward:"$4,500",coverUrl:"https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop",lore:"Высокопоставленный дипломат был найден мертвым во время эксклюзивного приема в Гранд-посольстве. Первоначальные отчеты указывают на отравление. В настоящее время всем гостям запрещено покидать территорию."}}),t=await T._.group.upsert({where:{code:"089-OMEGA"},update:{},create:{code:"089-OMEGA",title:"Операция: Сумерки",status:"ACTIVE",reward:"$12,000",coverUrl:"https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=800&auto=format&fit=crop",lore:"Утечка закрытых протоколов кибер-безопасности корпорации OmniCorp. В сети обнаружены следы автономного агента, выкачивающего засекреченные архивы."}});await T._.bot.upsert({where:{botId:"BR-8921"},update:{},create:{botId:"BR-8921",name:"Orion-X",token:"7123456789:AAFakeTokenOrionX_Example1",avatarUrl:"https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop",role:"Главный антагонист / Информатор",status:"ACTIVE",isActive:!0,groupId:e.id,model:"gemini-2.0-flash",temperature:.7,reasoningEnabled:!0,legend:"Известен как высокоуровневый корпоративный посредник и фиксер, действующий в секторе Нео-Берлин. Имеет репутацию безжалостной эффективности и абсолютной скрытности.",knowledge:"Обширные знания о тактике корпоративного шпионажа, ценах на черном рынке киберимплантов и внутренней структуре OmniCorp. Не знает точное местоположение базы повстанцев.",secrets:'На самом деле является двойным агентом, работающим на Сопротивление. Раскрывает это только при предъявлении кодовой фразы "Crimson Dawn".',character:"Говорит короткими, четкими фразами. Корпоративный жаргон использует умеренно. Никогда не выказывает сомнений. Тон холодный, аналитический, слегка циничный.",triggers:'ЕСЛИ пользователь упоминает "Проект Икар" -> немедленно прекратить беседу и записать тревогу. ЕСЛИ предлагает кредиты -> вежливо отклонить, но зафиксировать попытку подкупа.'}}),await T._.bot.upsert({where:{botId:"BR-4432"},update:{},create:{botId:"BR-4432",name:"Oracle-7",token:"7123456789:AAFakeTokenOracle7_Example2",avatarUrl:"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop",role:"Архивариус / Криминалист",status:"ACTIVE",isActive:!0,groupId:t.id,model:"gemini-2.0-flash",temperature:.4,reasoningEnabled:!1,legend:"Старший аналитик судебно-медицинской экспертизы.",knowledge:"Доступ к базе отпечатков пальцев, токсикологическим экспертизам.",character:"Говорит вежливо, методично, оперирует фактами и временными метками."}}),await T._.telegramUser.upsert({where:{telegramId:"98402911"},update:{},create:{telegramId:"98402911",username:"john_doe_99",firstName:"Джонатан",lastName:"Доу",status:"ACTIVE",dialogueCount:42,tokensUsed:14200,spentAmount:45,casesAccessed:JSON.stringify(["742-ALPHA","089-OMEGA"])}}),await T._.telegramUser.upsert({where:{telegramId:"11930422"},update:{},create:{telegramId:"11930422",username:"cipher_x",firstName:"Алиса",lastName:"Смит",status:"ACTIVE",dialogueCount:19,tokensUsed:6800,spentAmount:15,casesAccessed:JSON.stringify(["742-ALPHA"])}}),await T._.geminiApiKey.findFirst()||await T._.geminiApiKey.create({data:{name:"Gemini Primary (Default)",key:process.env.GEMINI_API_KEY||"AIzaSyDemoKey-SetYourOwnInSettings",status:"ACTIVE",latencyMs:135,requestCount:12}}),r=!0}catch(e){console.error("Initial data seed error:",e)}}}};var t=require("../../../webpack-runtime.js");t.C(e);var a=e=>t(t.s=e),T=t.X(0,[276,840,972],()=>a(1412));module.exports=T})();
