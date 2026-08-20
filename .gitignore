@@ -1,0 +1,38 @@
+# Environment variables and secrets
+.env
+.env.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+
+# Node.js
+node_modules/
+dist/
+*.log
+
+# Databases & Sessions
+*.db
+*.sqlite
+*.sqlite3
+*.session
+*.session-journal
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
