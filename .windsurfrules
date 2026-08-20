@@ -1,0 +1,9 @@
+# Windsurf AI Rules for Sherlock Admin & TG Bots Ecosystem
+
+## Mandatory Pre-Flight:
+Before executing or answering any coding prompt:
+1. Check `docs/LAST_UPDATES.md` to see recent changes made by the team.
+2. Follow `docs/ARCHITECTURE.md` and `admin-panel/prisma/schema.prisma`.
+
+## Mandatory Post-Flight:
+When you finish a task, add an entry to the top of `docs/LAST_UPDATES.md` summarizing what you did, which files were touched, and notes for the other developer.
