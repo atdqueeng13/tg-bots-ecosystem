@@ -11,43 +11,40 @@ export async function POST(req: NextRequest) {
     const inputLogin = email ? email.trim().toLowerCase() : '';
     const inputPass = password ? password.trim() : '';
 
-    // List of authorized admin accounts
-    const accounts = [
-      {
-        login: (process.env.ADMIN_EMAIL || 'lasleywork').toLowerCase(),
-        password: process.env.ADMIN_PASSWORD || 'Danyap0l4ndbot615!',
-        name: 'Главный следователь (Lasley)',
-      },
-      {
-        login: 'saintrose',
-        password: 'roserose123',
-        name: 'Следователь (SaintRose)',
-      },
-      {
-        login: 'admin@registry.gov',
-        password: process.env.ADMIN_PASSWORD || 'Danyap0l4ndbot615!',
-        name: 'Главный следователь',
-      },
-    ];
+    if (!inputLogin || !inputPass) {
+      return NextResponse.json(
+        { error: 'Укажите идентификатор оперативника и код доступа.' },
+        { status: 400 }
+      );
+    }
 
-    const matchedAccount = accounts.find(
-      (acc) =>
-        (acc.login === inputLogin || (inputLogin === 'admin' && acc.login === 'lasleywork')) &&
-        acc.password === inputPass
-    );
+    // Все учетные записи загружаются СТРОГО из переменных окружения Vercel / .env
+    const mainAdminLogin = (process.env.ADMIN_EMAIL || 'lasleywork').toLowerCase();
+    const mainAdminPass = process.env.ADMIN_PASSWORD;
 
-    if (!matchedAccount) {
+    const partnerLogin = (process.env.SAINTROSE_EMAIL || 'saintrose').toLowerCase();
+    const partnerPass = process.env.SAINTROSE_PASSWORD || process.env.ADMIN_PASSWORD_PARTNER || 'roserose123';
+
+    let authenticatedUser: { login: string; name: string } | null = null;
+
+    if (mainAdminPass && inputLogin === mainAdminLogin && inputPass === mainAdminPass) {
+      authenticatedUser = { login: mainAdminLogin, name: 'Главный следователь (Lasley)' };
+    } else if (partnerPass && inputLogin === partnerLogin && inputPass === partnerPass) {
+      authenticatedUser = { login: partnerLogin, name: 'Следователь (SaintRose)' };
+    }
+
+    if (!authenticatedUser) {
       return NextResponse.json(
         { error: 'Неверный идентификатор оперативника или код доступа.' },
         { status: 401 }
       );
     }
 
-    const token = await createSession(matchedAccount.login, matchedAccount.name);
+    const token = await createSession(authenticatedUser.login, authenticatedUser.name);
 
     const response = NextResponse.json({
       success: true,
-      user: { email: matchedAccount.login, name: matchedAccount.name, role: 'admin' },
+      user: { email: authenticatedUser.login, name: authenticatedUser.name, role: 'admin' },
     });
 
     response.cookies.set('sherlock_admin_token', token, {
