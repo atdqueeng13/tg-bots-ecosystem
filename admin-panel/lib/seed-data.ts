@@ -1,8 +1,138 @@
 import { prisma } from './prisma';
 
+let initialized = false;
+
 export async function ensureInitialData() {
+  if (initialized) return;
+
   try {
-    // 1. Global Setting
+    // 0. Auto-create tables in SQLite (/tmp/dev.db) if running on serverless
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Admin" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "email" TEXT NOT NULL,
+        "name" TEXT NOT NULL DEFAULT 'Главный следователь',
+        "passwordHash" TEXT NOT NULL DEFAULT '',
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Admin_email_key" ON "Admin"("email");`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Group" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "code" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+        "reward" TEXT DEFAULT '$4,500',
+        "lore" TEXT NOT NULL,
+        "coverUrl" TEXT,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Group_code_key" ON "Group"("code");`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Bot" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "botId" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "token" TEXT NOT NULL,
+        "avatarUrl" TEXT,
+        "role" TEXT NOT NULL DEFAULT 'Главный персонаж',
+        "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "lastPing" DATETIME,
+        "groupId" TEXT,
+        "model" TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
+        "temperature" REAL NOT NULL DEFAULT 0.7,
+        "reasoningEnabled" BOOLEAN NOT NULL DEFAULT false,
+        "legend" TEXT,
+        "knowledge" TEXT,
+        "secrets" TEXT,
+        "character" TEXT,
+        "triggers" TEXT,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Bot_botId_key" ON "Bot"("botId");`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "TelegramUser" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "telegramId" TEXT NOT NULL,
+        "username" TEXT,
+        "firstName" TEXT,
+        "lastName" TEXT,
+        "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+        "firstSeen" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "lastActive" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "dialogueCount" INTEGER NOT NULL DEFAULT 0,
+        "tokensUsed" INTEGER NOT NULL DEFAULT 0,
+        "casesAccessed" TEXT DEFAULT '[]',
+        "spentAmount" REAL NOT NULL DEFAULT 0.0
+      );
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "TelegramUser_telegramId_key" ON "TelegramUser"("telegramId");`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "UserDialogueLog" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "botId" TEXT NOT NULL,
+        "userMessage" TEXT NOT NULL,
+        "botResponse" TEXT NOT NULL,
+        "modelUsed" TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
+        "tokens" INTEGER NOT NULL DEFAULT 0,
+        "status" TEXT NOT NULL DEFAULT 'SUCCESS',
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "GeminiApiKey" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "name" TEXT NOT NULL DEFAULT 'Gemini Key',
+        "key" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'ACTIVE',
+        "latencyMs" INTEGER NOT NULL DEFAULT 120,
+        "requestCount" INTEGER NOT NULL DEFAULT 0,
+        "lastUsedAt" DATETIME,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Broadcast" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "code" TEXT NOT NULL,
+        "message" TEXT NOT NULL,
+        "mediaUrl" TEXT,
+        "audience" TEXT NOT NULL DEFAULT 'ALL',
+        "status" TEXT NOT NULL DEFAULT 'DELIVERED',
+        "sentCount" INTEGER NOT NULL DEFAULT 0,
+        "totalTarget" INTEGER NOT NULL DEFAULT 0,
+        "scheduledAt" DATETIME,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Broadcast_code_key" ON "Broadcast"("code");`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "GlobalSetting" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "systemPrompt" TEXT NOT NULL,
+        "primaryEngine" TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
+        "autoFallback" BOOLEAN NOT NULL DEFAULT true,
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // 1. Global Setting Seed
     const existingSetting = await prisma.globalSetting.findUnique({
       where: { id: 'global' },
     });
@@ -29,7 +159,7 @@ export async function ensureInitialData() {
       });
     }
 
-    // 2. Groups / Cases
+    // 2. Groups / Cases Seed
     const groupAlpha = await prisma.group.upsert({
       where: { code: '742-ALPHA' },
       update: {},
@@ -56,7 +186,7 @@ export async function ensureInitialData() {
       },
     });
 
-    // 3. Bots
+    // 3. Bots Seed
     await prisma.bot.upsert({
       where: { botId: 'BR-8921' },
       update: {},
@@ -101,7 +231,7 @@ export async function ensureInitialData() {
       },
     });
 
-    // 4. Sample Users
+    // 4. Sample Users Seed
     const user1 = await prisma.telegramUser.upsert({
       where: { telegramId: '98402911' },
       update: {},
@@ -118,7 +248,7 @@ export async function ensureInitialData() {
       },
     });
 
-    const user2 = await prisma.telegramUser.upsert({
+    await prisma.telegramUser.upsert({
       where: { telegramId: '11930422' },
       update: {},
       create: {
@@ -134,43 +264,7 @@ export async function ensureInitialData() {
       },
     });
 
-    // 5. Sample Dialogue Log
-    const orionBot = await prisma.bot.findUnique({ where: { botId: 'BR-8921' } });
-    if (orionBot) {
-      const existingLog = await prisma.userDialogueLog.findFirst({
-        where: { userId: user1.id },
-      });
-      if (!existingLog) {
-        await prisma.userDialogueLog.create({
-          data: {
-            userId: user1.id,
-            botId: orionBot.id,
-            userMessage: 'Кто стоял у входа в архив в 21:00?',
-            botResponse: '[ПРОТОКОЛ ДОПРОСА #849]: Записи камер повреждены, однако в журнале регистрации числится пропуск с идентификатором посла Волкова.',
-            modelUsed: 'gemini-2.0-flash',
-            tokens: 142,
-            status: 'SUCCESS',
-          },
-        });
-      }
-    }
-
-    // 6. Sample Broadcast
-    const existingBroadcast = await prisma.broadcast.findFirst();
-    if (!existingBroadcast) {
-      await prisma.broadcast.create({
-        data: {
-          code: 'BC-8892',
-          message: 'Внимание всем агентам: получены новые данные по делу 742-ALPHA. Проверьте реестр улик.',
-          audience: 'Дело: 742-ALPHA',
-          status: 'DELIVERED',
-          sentCount: 148,
-          totalTarget: 148,
-        },
-      });
-    }
-
-    // 7. Sample API Key if empty
+    // 5. Sample API Key Seed
     const existingKey = await prisma.geminiApiKey.findFirst();
     if (!existingKey) {
       await prisma.geminiApiKey.create({
@@ -183,6 +277,8 @@ export async function ensureInitialData() {
         },
       });
     }
+
+    initialized = true;
   } catch (err) {
     console.error('Initial data seed error:', err);
   }

@@ -8,26 +8,42 @@ export const dynamic = 'force-dynamic';
 export default async function DashboardPage() {
   await ensureInitialData();
 
-  const [
-    totalBots,
-    activeBots,
-    totalUsers,
-    recentLogs,
-    activeApiKey,
-  ] = await Promise.all([
-    prisma.bot.count(),
-    prisma.bot.count({ where: { status: 'ACTIVE' } }),
-    prisma.telegramUser.count(),
-    prisma.userDialogueLog.findMany({
-      take: 8,
-      orderBy: { createdAt: 'desc' },
-      include: {
-        user: true,
-        bot: true,
-      },
-    }),
-    prisma.geminiApiKey.findFirst({ where: { status: 'ACTIVE' } }),
-  ]);
+  let totalBots = 0;
+  let activeBots = 0;
+  let totalUsers = 0;
+  let recentLogs: any[] = [];
+  let apiLatency = 124;
+
+  try {
+    const [
+      bCount,
+      abCount,
+      uCount,
+      logs,
+      activeApiKey,
+    ] = await Promise.all([
+      prisma.bot.count(),
+      prisma.bot.count({ where: { status: 'ACTIVE' } }),
+      prisma.telegramUser.count(),
+      prisma.userDialogueLog.findMany({
+        take: 8,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: true,
+          bot: true,
+        },
+      }),
+      prisma.geminiApiKey.findFirst({ where: { status: 'ACTIVE' } }),
+    ]);
+
+    totalBots = bCount;
+    activeBots = abCount;
+    totalUsers = uCount;
+    recentLogs = logs;
+    if (activeApiKey?.latencyMs) apiLatency = activeApiKey.latencyMs;
+  } catch (err) {
+    console.error('Dashboard data fetch error:', err);
+  }
 
   return (
     <>
@@ -38,7 +54,7 @@ export default async function DashboardPage() {
           activeBots={activeBots}
           totalUsers={totalUsers}
           recentLogs={recentLogs}
-          apiLatency={activeApiKey?.latencyMs || 124}
+          apiLatency={apiLatency}
         />
       </main>
     </>
