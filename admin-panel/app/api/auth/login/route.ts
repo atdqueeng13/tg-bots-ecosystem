@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createSession, getExpectedAdminCredentials } from '@/lib/auth';
+import { createSession } from '@/lib/auth';
 import { ensureInitialData } from '@/lib/seed-data';
 
 export async function POST(req: NextRequest) {
@@ -8,29 +8,46 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { email, password } = body;
 
-    const expected = getExpectedAdminCredentials();
+    const inputLogin = email ? email.trim().toLowerCase() : '';
+    const inputPass = password ? password.trim() : '';
 
-    // Check credentials against ENV or default
-    const isEmailMatch =
-      email &&
-      (email.trim().toLowerCase() === expected.email.trim().toLowerCase() ||
-        email.trim() === 'admin' ||
-        email.trim() === 'agent');
+    // List of authorized admin accounts
+    const accounts = [
+      {
+        login: (process.env.ADMIN_EMAIL || 'lasleywork').toLowerCase(),
+        password: process.env.ADMIN_PASSWORD || 'Danyap0l4ndbot615!',
+        name: 'Главный следователь (Lasley)',
+      },
+      {
+        login: 'saintrose',
+        password: 'roserose123',
+        name: 'Следователь (SaintRose)',
+      },
+      {
+        login: 'admin@registry.gov',
+        password: process.env.ADMIN_PASSWORD || 'Danyap0l4ndbot615!',
+        name: 'Главный следователь',
+      },
+    ];
 
-    const isPasswordMatch = password && password === expected.password;
+    const matchedAccount = accounts.find(
+      (acc) =>
+        (acc.login === inputLogin || (inputLogin === 'admin' && acc.login === 'lasleywork')) &&
+        acc.password === inputPass
+    );
 
-    if (!isEmailMatch || !isPasswordMatch) {
+    if (!matchedAccount) {
       return NextResponse.json(
         { error: 'Неверный идентификатор оперативника или код доступа.' },
         { status: 401 }
       );
     }
 
-    const token = await createSession(expected.email, 'Главный следователь');
+    const token = await createSession(matchedAccount.login, matchedAccount.name);
 
     const response = NextResponse.json({
       success: true,
-      user: { email: expected.email, role: 'admin' },
+      user: { email: matchedAccount.login, name: matchedAccount.name, role: 'admin' },
     });
 
     response.cookies.set('sherlock_admin_token', token, {
