@@ -6,19 +6,23 @@ import { AdminsClient } from './admins-client';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminsPage() {
-  await ensureInitialData();
+  let admins: any[] = [];
 
-  const admins = await prisma.admin.findMany({
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      clearanceLevel: true,
-      role: true,
-      createdAt: true,
-    },
-    orderBy: { createdAt: 'asc' },
-  });
+  try {
+    admins = await prisma.admin.findMany({
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        clearanceLevel: true,
+        role: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  } catch (err) {
+    console.error('AdminsPage fetch error:', err);
+  }
 
   return (
     <>

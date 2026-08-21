@@ -6,19 +6,26 @@ import { BotsClient } from './bots-client';
 export const dynamic = 'force-dynamic';
 
 export default async function BotsPage() {
-  await ensureInitialData();
+  let bots: any[] = [];
+  let groups: any[] = [];
 
-  const [bots, groups] = await Promise.all([
-    prisma.bot.findMany({
-      include: {
-        group: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.group.findMany({
-      orderBy: { title: 'asc' },
-    }),
-  ]);
+  try {
+    const [bList, gList] = await Promise.all([
+      prisma.bot.findMany({
+        include: {
+          group: true,
+        },
+        orderBy: [{ orderIndex: 'asc' }, { createdAt: 'desc' }],
+      }),
+      prisma.group.findMany({
+        orderBy: { title: 'asc' },
+      }),
+    ]);
+    bots = bList;
+    groups = gList;
+  } catch (err) {
+    console.error('BotsPage fetch error:', err);
+  }
 
   return (
     <>

@@ -6,18 +6,22 @@ import { UsersClient } from './users-client';
 export const dynamic = 'force-dynamic';
 
 export default async function UsersPage() {
-  await ensureInitialData();
+  let users: any[] = [];
 
-  const users = await prisma.telegramUser.findMany({
-    include: {
-      dialogues: {
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        include: { bot: true },
+  try {
+    users = await prisma.telegramUser.findMany({
+      include: {
+        dialogues: {
+          take: 5,
+          orderBy: { createdAt: 'desc' },
+          include: { bot: true },
+        },
       },
-    },
-    orderBy: { lastActive: 'desc' },
-  });
+      orderBy: { lastActive: 'desc' },
+    });
+  } catch (err) {
+    console.error('UsersPage fetch error:', err);
+  }
 
   return (
     <>

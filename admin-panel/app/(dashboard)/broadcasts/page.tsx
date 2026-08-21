@@ -6,11 +6,23 @@ import { BroadcastsClient } from './broadcasts-client';
 export const dynamic = 'force-dynamic';
 
 export default async function BroadcastsPage() {
-  await ensureInitialData();
+  let broadcasts: any[] = [];
+  let activeUsersCount = 0;
 
-  const broadcasts = await prisma.broadcast.findMany({
-    orderBy: { createdAt: 'desc' },
-  });
+  try {
+    const [bList, uCount] = await Promise.all([
+      prisma.broadcast.findMany({
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.telegramUser.count({
+        where: { status: 'ACTIVE' },
+      }),
+    ]);
+    broadcasts = bList;
+    activeUsersCount = uCount;
+  } catch (err) {
+    console.error('BroadcastsPage fetch error:', err);
+  }
 
   return (
     <>

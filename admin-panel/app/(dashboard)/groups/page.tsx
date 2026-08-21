@@ -6,14 +6,20 @@ import { GroupsClient } from './groups-client';
 export const dynamic = 'force-dynamic';
 
 export default async function GroupsPage() {
-  await ensureInitialData();
+  let groups: any[] = [];
 
-  const groups = await prisma.group.findMany({
-    include: {
-      bots: true,
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  try {
+    groups = await prisma.group.findMany({
+      include: {
+        bots: {
+          orderBy: { orderIndex: 'asc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  } catch (err) {
+    console.error('GroupsPage fetch error:', err);
+  }
 
   return (
     <>

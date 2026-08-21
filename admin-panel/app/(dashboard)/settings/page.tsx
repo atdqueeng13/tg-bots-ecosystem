@@ -6,19 +6,28 @@ import { SettingsClient } from './settings-client';
 export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
-  await ensureInitialData();
+  let settings: any = null;
+  let keys: any[] = [];
+  let bots: any[] = [];
 
-  const [settings, keys, bots] = await Promise.all([
-    prisma.globalSetting.findUnique({
-      where: { id: 'global' },
-    }),
-    prisma.geminiApiKey.findMany({
-      orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
-    }),
-    prisma.bot.findMany({
-      orderBy: { name: 'asc' },
-    }),
-  ]);
+  try {
+    const [sRecord, kList, bList] = await Promise.all([
+      prisma.globalSetting.findUnique({
+        where: { id: 'global' },
+      }),
+      prisma.geminiApiKey.findMany({
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
+      }),
+      prisma.bot.findMany({
+        orderBy: { name: 'asc' },
+      }),
+    ]);
+    settings = sRecord;
+    keys = kList;
+    bots = bList;
+  } catch (err) {
+    console.error('SettingsPage fetch error:', err);
+  }
 
   const parsedKeys = keys.map((k) => {
     let models: string[] = [];
