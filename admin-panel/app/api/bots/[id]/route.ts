@@ -114,6 +114,7 @@ export async function PUT(
         ...(name !== undefined && { name }),
         ...(username !== undefined && { username }),
         ...(role !== undefined && { role }),
+        ...(body.orderIndex !== undefined && { orderIndex: parseInt(body.orderIndex) }),
         ...(status !== undefined && { status }),
         ...(isActive !== undefined && { isActive }),
         ...(isMainHub !== undefined && { isMainHub: !!isMainHub }),

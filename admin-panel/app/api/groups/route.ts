@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, lore, prompt, coverUrl, status, solutionTruth, isGuiltyBotId, starsPrice } = body;
+    const { title, lore, prompt, coverUrl, status, solutionTruth, isGuiltyBotId, starsPrice, winText, loseText, accusationAliases } = body;
 
     if (!title || title.trim() === '') {
       return NextResponse.json({ error: 'Название группы обязательно' }, { status: 400 });
@@ -47,6 +47,9 @@ export async function POST(req: NextRequest) {
         lore: lore || '',
         prompt: prompt || '',
         solutionTruth: solutionTruth || '',
+        winText: winText || '',
+        loseText: loseText || '',
+        accusationAliases: typeof accusationAliases === 'object' ? JSON.stringify(accusationAliases) : (accusationAliases || '{}'),
         isGuiltyBotId: isGuiltyBotId || null,
         starsPrice: starsPrice !== undefined ? Number(starsPrice) : 50,
         coverUrl: coverUrl || null,

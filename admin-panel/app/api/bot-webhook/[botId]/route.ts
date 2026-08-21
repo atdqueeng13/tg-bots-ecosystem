@@ -193,13 +193,57 @@ export async function POST(
           return NextResponse.json({ ok: true });
         }
 
-        if (data.startsWith('accuse_bot:')) {
-          const [, caseId, accusedBotId] = data.split(':');
-          await telegramCall(bot.token, 'sendMessage', {
-            chat_id: chatId,
-            text: `⚖️ Вы выбрали обвиняемого. Теперь отправьте ответным сообщением ваше **детективное обоснование** (почему вы считаете его убийцей, мотив и улики):`,
-            parse_mode: 'Markdown',
+        if (data.startsWith('accuse_confirm:') || data.startsWith('accuse_bot:')) {
+          const parts = data.split(':');
+          const caseId = parts[1];
+          const accusedBotId = parts[2];
+          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telegramId,
+              action: 'accuse_confirm',
+              caseId,
+              accusedBotId,
+            }),
           });
+          const hubData = await hubRes.json();
+          await sendHubPayload(hubData);
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data.startsWith('accuse_execute:')) {
+          const parts = data.split(':');
+          const caseId = parts[1];
+          const accusedBotId = parts[2];
+          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telegramId,
+              action: 'accuse_execute',
+              caseId,
+              accusedBotId,
+            }),
+          });
+          const hubData = await hubRes.json();
+          await sendHubPayload(hubData);
+          return NextResponse.json({ ok: true });
+        }
+
+        if (data.startsWith('pay_case:')) {
+          const caseId = data.replace('pay_case:', '');
+          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              telegramId,
+              action: 'stars_paid',
+              caseId,
+            }),
+          });
+          const hubData = await hubRes.json();
+          await sendHubPayload(hubData);
           return NextResponse.json({ ok: true });
         }
       }

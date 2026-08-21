@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { generateWithGemini } from '@/lib/gemini-rotator';
+import { buildHubSystemPrompt } from '@/lib/prompt-builder';
+import { checkPromptInjection } from '@/lib/security-guard';
 import { syncToFirebaseRTDB } from '@/lib/firebase';
 
 export async function POST(req: NextRequest) {
@@ -16,6 +18,7 @@ export async function POST(req: NextRequest) {
       accusedBotId,
       accusationReason,
       starsAmount,
+      stepIndex,
     } = body;
 
     if (!telegramId) {
@@ -42,6 +45,7 @@ export async function POST(req: NextRequest) {
     });
 
     const casesAccessed: string[] = JSON.parse(user.casesAccessed || '[]');
+    const caseProgressMap: Record<string, any> = JSON.parse(user.caseProgress || '{}');
 
     // Get the Main Hub Bot
     const hubBot = await prisma.bot.findFirst({
@@ -64,7 +68,8 @@ export async function POST(req: NextRequest) {
         include: {
           bots: {
             where: { isActive: true },
-            select: { id: true, name: true, role: true, username: true },
+            select: { id: true, name: true, role: true, username: true, orderIndex: true },
+            orderBy: { orderIndex: 'asc' },
           },
         },
         orderBy: { createdAt: 'asc' },
@@ -74,12 +79,16 @@ export async function POST(req: NextRequest) {
         customIntro ||
         `🕵️‍♂️ *Архив Детективных Расследований*\n\nВыберите доступное дело из списка ниже, чтобы получить досье и начать допросы:`;
 
-      const buttons = activeCases.map((c) => ({
-        text: `📂 ${c.title} (${c.bots.length} подозр.)${
-          c.starsPrice > 0 && !casesAccessed.includes(c.id) ? ` — ⭐ ${c.starsPrice} Stars` : ' — Открыто'
-        }`,
-        callback_data: `case:${c.id}`,
-      }));
+      const buttons = activeCases.map((c) => {
+        const isFree = c.starsPrice === 0;
+        const isUnlocked = casesAccessed.includes(c.id) || isFree;
+        return {
+          text: `📂 ${c.title} (${c.bots.length} подозр.)${
+            !isUnlocked ? ` — ⭐ ${c.starsPrice} Stars` : ' — Открыто'
+          }`,
+          callback_data: `case:${c.id}`,
+        };
+      });
 
       return {
         success: true,
@@ -92,12 +101,10 @@ export async function POST(req: NextRequest) {
 
     // --- ACTION: START (Runs Funnel if not completed) ---
     if (action === 'start') {
-      // If user already completed funnel or no funnel steps exist, show cases catalog directly
       if (user.funnelCompleted || funnelSteps.length === 0) {
         return NextResponse.json(await buildCasesCatalog());
       }
 
-      // Serve Step 0 of the Funnel
       const currentStepIndex = 0;
       const step = funnelSteps[currentStepIndex] || {
         text: 'Добро пожаловать в Детективное Бюро!',
@@ -131,9 +138,8 @@ export async function POST(req: NextRequest) {
 
     // --- ACTION: FUNNEL STEP (Next step in onboarding) ---
     if (action === 'funnel_step') {
-      const nextStepIndex = typeof body.stepIndex === 'number' ? body.stepIndex : user.funnelStep + 1;
+      const nextStepIndex = typeof stepIndex === 'number' ? stepIndex : user.funnelStep + 1;
 
-      // If reached end of funnel
       if (nextStepIndex >= funnelSteps.length) {
         await prisma.telegramUser.update({
           where: { id: user.id },
@@ -170,7 +176,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // --- ACTION: CASES (Command /cases or /menu - Shows Catalog Anytime) ---
+    // --- ACTION: CASES (Command /cases or /menu) ---
     if (action === 'cases' || action === 'menu') {
       return NextResponse.json(await buildCasesCatalog());
     }
@@ -179,9 +185,23 @@ export async function POST(req: NextRequest) {
     if (action === 'chat') {
       const userMessage = String(body.userMessage || '').trim();
 
-      // Check if user is typing commands
       if (userMessage.startsWith('/cases') || userMessage.startsWith('/menu')) {
         return NextResponse.json(await buildCasesCatalog());
+      }
+
+      if (userMessage.startsWith('/accuse')) {
+        return NextResponse.json(await handleAccuseSelect(user.activeCaseId));
+      }
+
+      // Anti-Jailbreak check for Hub Bot
+      const injection = checkPromptInjection(userMessage, { name: 'Шеф Бюро', isMainHub: true });
+      if (injection.isInjection) {
+        return NextResponse.json({
+          success: true,
+          isFunnel: false,
+          text: injection.refusalText,
+          buttons: [{ text: '📂 Открыть архив Дел (/cases)', callback_data: 'hub:cases' }],
+        });
       }
 
       // If funnel is NOT completed, lock AI
@@ -200,41 +220,66 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      // If funnel is completed, AI Chief Assistant responds
+      // Check if user is typing an accusation by name / alias
+      if (user.activeCaseId) {
+        const activeCase = await prisma.group.findUnique({
+          where: { id: user.activeCaseId },
+          include: { bots: { where: { isActive: true } } },
+        });
+
+        if (activeCase) {
+          const lower = userMessage.toLowerCase();
+          let aliasesMap: Record<string, string[]> = {};
+          try {
+            aliasesMap = JSON.parse(activeCase.accusationAliases || '{}');
+          } catch {}
+
+          for (const suspect of activeCase.bots) {
+            const suspectNameLower = suspect.name.toLowerCase();
+            const suspectAliases = (aliasesMap[suspect.id] || []).map((a) => a.toLowerCase());
+            const matchesName = lower.includes(suspectNameLower) || suspectNameLower.split(' ').some((part) => part.length > 3 && lower.includes(part));
+            const matchesAlias = suspectAliases.some((alias) => lower.includes(alias));
+
+            if ((matchesName || matchesAlias) && (lower.includes('обвиня') || lower.includes('убийц') || lower.includes('виновен') || lower.includes('виновен') || lower.includes('это '))) {
+              return NextResponse.json({
+                success: true,
+                text: `⚖️ *ПОДТВЕРЖДЕНИЕ ОБВИНЕНИЯ*\n\nВы упомянули подозреваемого **${suspect.name}**.\nВы действительно хотите официально предъявить ему обвинение в убийстве?\n\n⚠️ *Отозвать обвинение будет нельзя. Это действие завершит расследование!*`,
+                buttons: [
+                  { text: `🎯 Да, обвинить: ${suspect.name}`, callback_data: `accuse_execute:${activeCase.id}:${suspect.id}` },
+                  { text: '❌ Отмена', callback_data: `accuse_menu:${activeCase.id}` },
+                ],
+              });
+            }
+          }
+        }
+      }
+
+      // AI Chief Assistant with dedicated isolated prompt
       const activeCases = await prisma.group.findMany({
         where: { status: 'ACTIVE' },
-        include: { bots: { where: { isActive: true }, select: { name: true, role: true } } },
+        include: {
+          bots: {
+            where: { isActive: true },
+            select: { name: true, role: true, orderIndex: true },
+            orderBy: { orderIndex: 'asc' },
+          },
+        },
       });
 
-      const casesLoreSnippet = activeCases
-        .map(
-          (c) =>
-            `- Дело "${c.title}": ${c.lore || 'без описания'}. Подозреваемые: ${c.bots
-              .map((b) => `${b.name} (${b.role})`)
-              .join(', ')}. Стоимость: ${c.starsPrice > 0 ? `${c.starsPrice} Stars` : 'Бесплатно'}.`
-        )
-        .join('\n');
-
-      const systemPrompt = `${hubBot?.prompt || 'Ты — Шеф Детективного Бюро Скотланд-Ярда.'}
-ДАННЫЕ АКТИВНЫХ ДЕЛ СЕГОДНЯ:
-${casesLoreSnippet}
-
-ДАННЫЕ ИГРОКА:
-- Имя сыщика: ${user.firstName || user.username || 'Сыщик'}
-- Текущее расследуемое дело ID: ${user.activeCaseId || 'Не выбрано'}
-
-ПРАВИЛА ОТВЕТОВ:
-1. Отвечай солидно, в атмосфере классического детективного романа.
-2. Напоминай сыщику о доступных делах дня и открытых расследованиях.
-3. Если сыщик хочет открыть список дел или оплатить, подскажи команду /cases.
-4. Если сыщик готов обвинить преступника, подскажи команду /accuse.
-5. Не раскрывай истину дел и имена убийц напрямую!`;
+      const chiefSystemPrompt = buildHubSystemPrompt(hubBot, activeCases, {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        username: user.username,
+        activeCaseId: user.activeCaseId,
+        stage: user.stage,
+        casesAccessed,
+      });
 
       const aiResponse = await generateWithGemini({
-        systemPrompt,
+        systemPrompt: chiefSystemPrompt,
         userPrompt: userMessage,
         modelName: hubBot?.model || 'gemini-3.6-flash',
-        temperature: 0.7,
+        temperature: hubBot?.temperature !== undefined ? hubBot.temperature : 0.7,
       });
 
       return NextResponse.json({
@@ -243,6 +288,7 @@ ${casesLoreSnippet}
         text: aiResponse.text,
         buttons: [
           { text: '📂 Открыть архив Дел (/cases)', callback_data: 'hub:cases' },
+          ...(user.activeCaseId ? [{ text: '⚖️ Обвинить (/accuse)', callback_data: `accuse_menu:${user.activeCaseId}` }] : []),
         ],
       });
     }
@@ -254,7 +300,8 @@ ${casesLoreSnippet}
         include: {
           bots: {
             where: { isActive: true },
-            select: { id: true, name: true, role: true, username: true },
+            select: { id: true, name: true, role: true, username: true, orderIndex: true },
+            orderBy: { orderIndex: 'asc' },
           },
         },
       });
@@ -263,15 +310,42 @@ ${casesLoreSnippet}
         return NextResponse.json({ error: 'Дело не найдено' }, { status: 404 });
       }
 
-      await prisma.telegramUser.update({
-        where: { id: user.id },
-        data: { activeCaseId: targetCase.id, stage: 'INVESTIGATING' },
-      });
+      // If free case, auto-unlock
+      if (targetCase.starsPrice === 0 && !casesAccessed.includes(targetCase.id)) {
+        casesAccessed.push(targetCase.id);
+        await prisma.telegramUser.update({
+          where: { id: user.id },
+          data: {
+            casesAccessed: JSON.stringify(casesAccessed),
+            activeCaseId: targetCase.id,
+            stage: 'INVESTIGATING',
+          },
+        });
+      } else {
+        await prisma.telegramUser.update({
+          where: { id: user.id },
+          data: { activeCaseId: targetCase.id, stage: 'INVESTIGATING' },
+        });
+      }
 
-      const briefing = `📁 *${targetCase.title}*\n\n📜 *Обстоятельства преступления:*\n${targetCase.lore || 'Детали уточняются.'}\n\n🚪 *В коридоре перед вашим кабинетом ждут подозреваемые:*\nВы можете вызывать их на допрос в любом порядке. Будьте внимательны: они нервничают, передают слухи и пытаются скрыть свои секреты!`;
+      const isPaidAndLocked = targetCase.starsPrice > 0 && !casesAccessed.includes(targetCase.id);
 
-      const suspectButtons = targetCase.bots.map((b) => ({
-        text: `👤 Допросить: ${b.name} (${b.role})`,
+      if (isPaidAndLocked) {
+        return NextResponse.json({
+          success: true,
+          text: `📁 *${targetCase.title}*\n\n📜 *Обстоятельства преступления:*\n${targetCase.lore || 'Детали закрыты грифом секретности.'}\n\n⭐ *Стоимость доступа:* ${targetCase.starsPrice} Telegram Stars\nОплатите доступ для вызова подозреваемых на допрос:`,
+          buttons: [
+            { text: `⭐ Открыть дело (${targetCase.starsPrice} Stars)`, callback_data: `pay_case:${targetCase.id}` },
+            { text: '⬅️ Назад в архив дел', callback_data: 'hub:cases' },
+          ],
+        });
+      }
+
+      const briefing = `📁 *${targetCase.title}*\n\n📜 *Обстоятельства преступления:*\n${targetCase.lore || 'Детали расследования.'}\n\n🚪 *Подозреваемые по делу:*
+Вы можете вызывать их на допрос в любом порядке. Будьте внимательны: каждый что-то скрывает!`;
+
+      const suspectButtons = targetCase.bots.map((b, idx) => ({
+        text: `👤 #${b.orderIndex || idx + 1} ${b.name} (${b.role})`,
         url: b.username ? `https://t.me/${b.username.replace('@', '')}?start=case_${targetCase.id}_${telegramId}` : undefined,
         callback_data: !b.username ? `talk:${b.id}` : undefined,
       }));
@@ -290,33 +364,93 @@ ${casesLoreSnippet}
       });
     }
 
-    // --- ACTION: ACCUSE MENU ---
-    if (action === 'accuse_select') {
+    // Helper for accuse select
+    async function handleAccuseSelect(targetCaseId?: string | null) {
       const activeCase = await prisma.group.findUnique({
-        where: { id: caseId || user.activeCaseId || '' },
-        include: { bots: { where: { isActive: true } } },
+        where: { id: targetCaseId || user.activeCaseId || '' },
+        include: {
+          bots: {
+            where: { isActive: true },
+            select: { id: true, name: true, role: true, orderIndex: true },
+            orderBy: { orderIndex: 'asc' },
+          },
+        },
       });
 
       if (!activeCase) {
-        return NextResponse.json({ error: 'Активное дело не найдено' }, { status: 404 });
+        return {
+          success: false,
+          text: '⚠️ *У вас нет активного дела для обвинения.*\nСначала выберите расследование через команду /cases.',
+          buttons: [{ text: '📂 Выбрать дело (/cases)', callback_data: 'hub:cases' }],
+        };
       }
 
-      const text = `⚖️ *ПРЕДЪЯВЛЕНИЕ ОБВИНЕНИЯ*\n\nКого из подозреваемых вы считаете настоящим убийцей? Выберите персонажа:`;
+      const text = `⚖️ *ПРЕДЪЯВЛЕНИЕ ОБВИНЕНИЯ*\nДело: «${activeCase.title}»\n\nКого из подозреваемых вы считаете настоящим убийцей? Выберите персонажа:`;
 
-      const buttons = activeCase.bots.map((b) => ({
-        text: `🎯 Обвинить: ${b.name}`,
-        callback_data: `accuse_bot:${activeCase.id}:${b.id}`,
+      const buttons = activeCase.bots.map((b, idx) => ({
+        text: `🎯 #${b.orderIndex || idx + 1} ${b.name}`,
+        callback_data: `accuse_confirm:${activeCase.id}:${b.id}`,
       }));
 
-      return NextResponse.json({
+      buttons.push({
+        text: '⬅️ Назад к досье дела',
+        callback_data: `case:${activeCase.id}`,
+      });
+
+      return {
         success: true,
         text,
         buttons,
+      };
+    }
+
+    // --- ACTION: ACCUSE SELECT MENU ---
+    if (action === 'accuse_select') {
+      const result = await handleAccuseSelect(caseId);
+      return NextResponse.json(result);
+    }
+
+    // --- ACTION: ACCUSE CONFIRM PROMPT ---
+    if (action === 'accuse_confirm') {
+      const targetCase = await prisma.group.findUnique({
+        where: { id: caseId || user.activeCaseId || '' },
+        include: { bots: true },
+      });
+
+      if (!targetCase) {
+        return NextResponse.json({ error: 'Дело не найдено' }, { status: 404 });
+      }
+
+      const accusedBot = targetCase.bots.find((b) => b.id === accusedBotId);
+      if (!accusedBot) {
+        return NextResponse.json({ error: 'Подозреваемый не найден' }, { status: 404 });
+      }
+
+      const confirmText = `⚖️ *ПОДТВЕРЖДЕНИЕ ОБВИНЕНИЯ*
+
+Вы официально предъявляете обвинение в убийстве подозреваемому:
+👤 **${accusedBot.name}** (${accusedBot.role || 'Подозреваемый'})
+
+⚠️ *Внимание: отозвать обвинение будет невозможно. Это решение окончательно завершит следствие по делу!*`;
+
+      return NextResponse.json({
+        success: true,
+        text: confirmText,
+        buttons: [
+          {
+            text: `🎯 Да, подтверждаю обвинение!`,
+            callback_data: `accuse_execute:${targetCase.id}:${accusedBot.id}`,
+          },
+          {
+            text: `❌ Отмена (вернуться к выбору)`,
+            callback_data: `accuse_menu:${targetCase.id}`,
+          },
+        ],
       });
     }
 
-    // --- ACTION: SUBMIT ACCUSATION ---
-    if (action === 'submit_accusation') {
+    // --- ACTION: ACCUSE EXECUTE (DETERMINISTIC FINAL) ---
+    if (action === 'accuse_execute' || action === 'submit_accusation') {
       const targetCase = await prisma.group.findUnique({
         where: { id: caseId || user.activeCaseId || '' },
         include: { bots: true },
@@ -329,35 +463,47 @@ ${casesLoreSnippet}
       const accusedBot = targetCase.bots.find((b) => b.id === accusedBotId);
       const isActualKiller = accusedBot?.isGuilty || (targetCase.isGuiltyBotId && accusedBot?.id === targetCase.isGuiltyBotId);
 
-      const evaluationPrompt = `ТЫ ГЛАВНЫЙ СУДЬЯ И ВЕДУЩИЙ ДЕТЕКТИВНОЙ ИГРЫ.
-МАТЕРИАЛЫ ДЕЛА: ${targetCase.title}
-ИСТИНА ПРЕСТУПЛЕНИЯ (ЗАКРЫТАЯ ИНФОРМАЦИЯ):
-${targetCase.solutionTruth || targetCase.lore}
+      const defaultWinText = `🎉 *ДЕЛО РАСКРЫТО! БЛЕСТЯЩАЯ ПОБЕДА!*
 
-ОБВИНЕННЫЙ ИГРОКОМ: ${accusedBot?.name || 'Неизвестный'} (Является ли убийцей по факту: ${isActualKiller ? 'ДА, ЭТО УБИЙЦА' : 'НЕТ, ЭТО НЕВИНОВНЫЙ'})
-ОБОСНОВАНИЕ ИГРОКА: "${accusationReason || 'Без комментариев'}"
+Утро. Из театра выносят бутафорский гроб из второго акта.
+Артём Вьюгин идёт мимо в наручниках и, не удержавшись, поправляет воротник статисту:
+— «Держите спину. В кадре всё имеет значение».
 
-ТВОЯ ЗАДАЧА:
-1. Вынеси вердикт расследованию в ярком, атмосферном детективном стиле.
-2. Поставь детективную оценку от 1 до 10.
-3. Если обвинен убийца: похвали за раскрытие, объясни, как именно детектив раскусил его нескладную ложь, и раскрой полную картину преступления.
-4. Если обвинен невиновный: драматично опиши, как настоящий убийца остался на свободе, раскрой истинную правду и покажи, где детектив ошибся.`;
+Премьеру «Перехода» отменяют. В программку допечатывают:
+*«Исполнитель роли Лакея — Артём Вьюгин. Впервые и в последний раз — в роли себя»*.`;
 
-      const aiVerdict = await generateWithGemini({
-        systemPrompt: evaluationPrompt,
-        userPrompt: `Вынеси вердикт по делу ${targetCase.title}. Обвиняемый: ${accusedBot?.name}. Аргументы: ${accusationReason}`,
-        modelName: 'gemini-2.0-flash',
-        temperature: 0.5,
-      });
+      const defaultLoseText = `❌ *ОШИБКА СЛЕДСТВИЯ! НАСТОЯЩИЙ УБИЙЦА УСКОЛЬЗНУЛ!*
 
-      const verdictText = aiVerdict.text;
+Детектив уезжает. Невиновный взят под стражу до выяснения обстоятельств.
+В пустой реквизитной человек в белых перчатках аккуратно ставит поднос на место. Смотрит на шкаф №3.
+Улыбается в темноту:
+— «Второй акт только начинается...»`;
+
+      const verdictText = isActualKiller
+        ? (targetCase.winText && targetCase.winText.trim() ? targetCase.winText.trim() : defaultWinText)
+        : (targetCase.loseText && targetCase.loseText.trim() ? targetCase.loseText.trim() : defaultLoseText);
+
       const isSolved = Boolean(isActualKiller);
+
+      // Record case completion in user profile
+      const updatedCaseProgress = {
+        ...caseProgressMap,
+        [targetCase.id]: {
+          ...(caseProgressMap[targetCase.id] || {}),
+          completed: true,
+          result: isSolved ? 'SOLVED' : 'FAILED',
+          accusedBotId: accusedBot?.id,
+          accusedBotName: accusedBot?.name,
+          timestamp: new Date().toISOString(),
+        },
+      };
 
       await prisma.telegramUser.update({
         where: { id: user.id },
         data: {
           stage: isSolved ? 'SOLVED' : 'FAILED',
           stageStatus: isSolved ? 'COMPLETED' : 'FAILED',
+          caseProgress: JSON.stringify(updatedCaseProgress),
         },
       });
 
@@ -374,7 +520,10 @@ ${targetCase.solutionTruth || targetCase.lore}
         success: true,
         isSolved,
         accusedBotName: accusedBot?.name,
-        verdictText,
+        text: verdictText,
+        buttons: [
+          { text: '📂 Архив расследований (/cases)', callback_data: 'hub:cases' },
+        ],
       });
     }
 
@@ -394,6 +543,7 @@ ${targetCase.solutionTruth || targetCase.lore}
       return NextResponse.json({
         success: true,
         message: 'Дело успешно разблокировано!',
+        buttons: [{ text: '📂 Открыть материалы дела', callback_data: `case:${caseId}` }],
       });
     }
 

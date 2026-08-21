@@ -23,6 +23,9 @@ export function GroupsClient({ initialGroups }: Props) {
     prompt: '',
     starsPrice: 0,
     solutionTruth: '',
+    winText: '',
+    loseText: '',
+    accusationAliases: '',
     status: 'ACTIVE',
   });
 
@@ -49,6 +52,9 @@ export function GroupsClient({ initialGroups }: Props) {
       prompt: '',
       starsPrice: 0,
       solutionTruth: '',
+      winText: '',
+      loseText: '',
+      accusationAliases: '',
       status: 'ACTIVE',
     });
     setIsCreating(true);
@@ -64,6 +70,9 @@ export function GroupsClient({ initialGroups }: Props) {
       prompt: group.prompt || '',
       starsPrice: group.starsPrice !== undefined ? group.starsPrice : 0,
       solutionTruth: group.solutionTruth || '',
+      winText: group.winText || '',
+      loseText: group.loseText || '',
+      accusationAliases: group.accusationAliases || '',
       status: group.status || 'ACTIVE',
     });
     setIsCreating(false);
@@ -308,21 +317,64 @@ export function GroupsClient({ initialGroups }: Props) {
               <div>
                 <label className="block font-label-caps text-xs text-red-400 uppercase mb-1 font-semibold flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-sm">gavel</span>
-                  Скрытая истина дела (для ИИ-судьи при команде /accuse)
+                  Скрытая истина дела (досье преступления)
                 </label>
                 <textarea
-                  rows={4}
+                  rows={3}
                   value={formData.solutionTruth}
                   onChange={(e) => setFormData({ ...formData, solutionTruth: e.target.value })}
-                  placeholder="Убийца — дворецкий Джеймс Спенсер. Мотив: лорд обнаружил поддельные чеки. В 22:45 дворецкий подсыпал яд в бренди..."
+                  placeholder="Убийца — Артём Вьюгин. Мотив: Стрельцов писал пьесу-разоблачение «Переход»..."
                   className="w-full bg-[#1a1a1a] border border-red-500/40 rounded p-3 text-xs text-red-200 font-mono-code focus:border-red-400 outline-none leading-relaxed resize-y"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-label-caps text-xs text-emerald-400 uppercase mb-1 font-semibold flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">emoji_events</span>
+                    Текст Победы (верное обвинение)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={formData.winText}
+                    onChange={(e) => setFormData({ ...formData, winText: e.target.value })}
+                    placeholder="Утро. Из театра выносят бутафорский гроб... Артём идёт мимо в наручниках..."
+                    className="w-full bg-[#1a1a1a] border border-emerald-500/40 rounded p-2.5 text-xs text-emerald-200 font-mono focus:border-emerald-400 outline-none leading-relaxed resize-y"
+                  />
+                </div>
+                <div>
+                  <label className="block font-label-caps text-xs text-rose-400 uppercase mb-1 font-semibold flex items-center gap-1">
+                    <span className="material-symbols-outlined text-sm">heart_broken</span>
+                    Текст Поражения (ошибка сыщика)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={formData.loseText}
+                    onChange={(e) => setFormData({ ...formData, loseText: e.target.value })}
+                    placeholder="Детектив уезжает. В пустой реквизитной человек в белых перчатках аккуратно ставит поднос..."
+                    className="w-full bg-[#1a1a1a] border border-rose-500/40 rounded p-2.5 text-xs text-rose-200 font-mono focus:border-rose-400 outline-none leading-relaxed resize-y"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-label-caps text-xs text-amber-300 uppercase mb-1 font-semibold flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">alternate_email</span>
+                  Алиасы и синонимы подозреваемых (JSON для свободного ввода)
+                </label>
+                <input
+                  type="text"
+                  value={formData.accusationAliases}
+                  onChange={(e) => setFormData({ ...formData, accusationAliases: e.target.value })}
+                  placeholder='{"artyom": ["артём", "вьюгин", "лакей", "дублер"]}'
+                  className="w-full bg-[#1a1a1a] border border-amber-500/30 rounded px-3 py-2 text-xs text-amber-200 font-mono focus:border-amber-400 outline-none"
                 />
               </div>
 
               <div>
                 <div className="flex justify-between items-center mb-1">
                   <label className="font-label-caps text-xs text-on-surface-variant uppercase font-semibold">
-                    Общий контекст и атмосфера для всех подозреваемых
+                    Общий контекст и канонические факты для всех подозреваемых
                   </label>
                   <span className="text-[11px] text-on-surface-variant font-mono-code">
                     Наследуется всеми ботами этого дела
@@ -332,7 +384,7 @@ export function GroupsClient({ initialGroups }: Props) {
                   rows={4}
                   value={formData.prompt}
                   onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
-                  placeholder="Действие происходит в Англии, 1920-е годы. Гроза за окном. Все сидят в приемной..."
+                  placeholder="Расписание вечера: 16:00 - прогон, 19:00 - спектакль, 20:07 - смерть Стрельцова..."
                   className="w-full bg-[#1a1a1a] border border-[#333333] rounded p-3 text-xs text-white font-mono-code focus:border-primary-container outline-none leading-relaxed resize-y"
                 />
               </div>

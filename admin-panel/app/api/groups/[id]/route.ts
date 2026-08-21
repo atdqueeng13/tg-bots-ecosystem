@@ -44,7 +44,7 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { title, lore, prompt, coverUrl, status, solutionTruth, isGuiltyBotId, starsPrice } = body;
+    const { title, lore, prompt, coverUrl, status, solutionTruth, isGuiltyBotId, starsPrice, winText, loseText, accusationAliases } = body;
 
     const group = await prisma.group.findFirst({
       where: {
@@ -63,6 +63,11 @@ export async function PUT(
         ...(lore !== undefined && { lore }),
         ...(prompt !== undefined && { prompt }),
         ...(solutionTruth !== undefined && { solutionTruth }),
+        ...(winText !== undefined && { winText }),
+        ...(loseText !== undefined && { loseText }),
+        ...(accusationAliases !== undefined && {
+          accusationAliases: typeof accusationAliases === 'object' ? JSON.stringify(accusationAliases) : accusationAliases,
+        }),
         ...(isGuiltyBotId !== undefined && { isGuiltyBotId }),
         ...(starsPrice !== undefined && { starsPrice: Number(starsPrice) }),
         ...(coverUrl !== undefined && { coverUrl }),

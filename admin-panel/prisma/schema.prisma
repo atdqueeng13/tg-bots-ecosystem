@@ -40,25 +40,29 @@ model Bot {
   temperature      Float             @default(0.7)
   reasoningEnabled Boolean           @default(false)
   prompt           String?           // Сплошной системный промпт бота
+  orderIndex       Int               @default(0) // Порядковый номер подозреваемого в деле
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   dialogues        UserDialogueLog[]
 }
 
 model Group {
-  id            String   @id @default(uuid())
-  code          String   @unique // e.g. "case_blackwood"
-  title         String // e.g. "Дело №1: Тайна особняка Блэквуд"
-  status        String   @default("ACTIVE") // ACTIVE, ARCHIVED
-  lore          String   @default("") // Описание / обстоятельства преступления
-  prompt        String?  @default("") // Групповой системный контекст / лор дела
-  solutionTruth String?  @default("") // Закрытая истина дела: кто убийца, мотив, как произошло
-  isGuiltyBotId String?  // ID бота-убийцы
-  starsPrice    Int      @default(50) // Стоимость дела в Telegram Stars (0 = бесплатно)
-  coverUrl      String?
-  bots          Bot[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  code               String   @unique // e.g. "case_blackwood"
+  title              String // e.g. "Дело №1: Тайна особняка Блэквуд"
+  status             String   @default("ACTIVE") // ACTIVE, ARCHIVED
+  lore               String   @default("") // Описание / обстоятельства преступления
+  prompt             String?  @default("") // Групповой системный контекст / лор дела
+  solutionTruth      String?  @default("") // Закрытая истина дела: кто убийца, мотив, как произошло
+  winText            String?  @default("") // Текст триумфальной победы (при верном обвинении)
+  loseText           String?  @default("") // Текст поражения (при ошибочном обвинении)
+  accusationAliases  String?  @default("{}") // JSON алиасов подозреваемых для свободного ввода
+  isGuiltyBotId      String?  // ID бота-убийцы
+  starsPrice         Int      @default(50) // Стоимость дела в Telegram Stars (0 = бесплатно)
+  coverUrl           String?
+  bots               Bot[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model TelegramUser {

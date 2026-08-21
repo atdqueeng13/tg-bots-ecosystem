@@ -59,6 +59,7 @@ export function BotsClient({ initialBots, groups = [] }: Props) {
     reasoningEnabled: false,
     isActive: true,
     isMainHub: false,
+    orderIndex: 0,
     isGuilty: false,
     secretAlibi: '',
     prompt: '',
@@ -166,6 +167,7 @@ export function BotsClient({ initialBots, groups = [] }: Props) {
       reasoningEnabled: !!bot.reasoningEnabled,
       isActive: bot.isActive !== undefined ? bot.isActive : true,
       isMainHub: !!bot.isMainHub,
+      orderIndex: bot.orderIndex !== undefined ? bot.orderIndex : 0,
       isGuilty: !!bot.isGuilty,
       secretAlibi: bot.secretAlibi || '',
       prompt: bot.prompt || '',
@@ -210,6 +212,7 @@ export function BotsClient({ initialBots, groups = [] }: Props) {
       reasoningEnabled: false,
       isActive: true,
       isMainHub: forMainHub,
+      orderIndex: 0,
       isGuilty: false,
       secretAlibi: '',
       prompt: forMainHub
@@ -794,23 +797,39 @@ export function BotsClient({ initialBots, groups = [] }: Props) {
                       </div>
                     </div>
 
-                    {!formData.isMainHub && groups && groups.length > 0 && (
-                      <div>
-                        <label className="block font-label-caps text-xs text-on-surface-variant mb-1">
-                          Привязка к Делу (Группе)
-                        </label>
-                        <select
-                          value={formData.groupId}
-                          onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
-                          className="w-full bg-[#1a1a1a] border border-[#333333] rounded focus:border-primary-container text-[#ffffff] text-xs px-3 py-2 transition-colors outline-none cursor-pointer"
-                        >
-                          <option value="">Без дела</option>
-                          {groups.map((g) => (
-                            <option key={g.id} value={g.id}>
-                              {g.title} ({g.code})
-                            </option>
-                          ))}
-                        </select>
+                    {!formData.isMainHub && (
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2">
+                          <label className="block font-label-caps text-xs text-on-surface-variant mb-1">
+                            Привязка к Делу
+                          </label>
+                          <select
+                            value={formData.groupId}
+                            onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
+                            className="w-full bg-[#1a1a1a] border border-[#333333] rounded focus:border-primary-container text-[#ffffff] text-xs px-3 py-2 transition-colors outline-none cursor-pointer"
+                          >
+                            <option value="">Без дела</option>
+                            {groups.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {g.title} ({g.code})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block font-label-caps text-xs text-amber-300 mb-1" title="Порядковый номер допроса в деле">
+                            Номер #
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="20"
+                            value={formData.orderIndex}
+                            onChange={(e) => setFormData({ ...formData, orderIndex: parseInt(e.target.value) || 0 })}
+                            placeholder="1"
+                            className="w-full bg-[#1a1a1a] border border-amber-500/40 rounded focus:border-amber-400 text-amber-200 font-mono font-bold text-xs px-2.5 py-2 transition-colors outline-none text-center"
+                          />
+                        </div>
                       </div>
                     )}
 

@@ -81,7 +81,20 @@ class SherlockBotAgent:
             await call.answer()
             data = call.data or ""
 
-            if data.startswith("case:"):
+            if data == "hub:cases" or data == "cases":
+                res = await self._call_hub_api(call.from_user, action="cases")
+                if res.get("text"):
+                    kb = self._build_keyboard(res.get("buttons", []))
+                    await call.message.answer(res["text"], parse_mode="Markdown", reply_markup=kb)
+
+            elif data.startswith("funnel_step:"):
+                step_idx = int(data.replace("funnel_step:", "")) if data.replace("funnel_step:", "").isdigit() else 0
+                res = await self._call_hub_api(call.from_user, action="funnel_step", step_index=step_idx)
+                if res.get("text"):
+                    kb = self._build_keyboard(res.get("buttons", []))
+                    await call.message.answer(res["text"], parse_mode="Markdown", reply_markup=kb)
+
+            elif data.startswith("case:"):
                 case_id = data.replace("case:", "")
                 res = await self._call_hub_api(call.from_user, action="select_case", case_id=case_id)
                 if res.get("text"):
@@ -95,29 +108,43 @@ class SherlockBotAgent:
                     kb = self._build_keyboard(res.get("buttons", []))
                     await call.message.answer(res["text"], parse_mode="Markdown", reply_markup=kb)
 
-            elif data.startswith("accuse_bot:"):
+            elif data.startswith("accuse_confirm:") or data.startswith("accuse_bot:"):
                 parts = data.split(":")
                 case_id = parts[1] if len(parts) > 1 else ""
                 accused_id = parts[2] if len(parts) > 2 else ""
-                await call.message.answer(
-                    "⚖️ Вы выбрали обвиняемого.\n\nТеперь отправьте ответным сообщением ваше **детективное обоснование** (почему вы считаете его убийцей, мотив и улики):",
-                    parse_mode="Markdown"
-                )
+                res = await self._call_hub_api(call.from_user, action="accuse_confirm", case_id=case_id, accused_bot_id=accused_id)
+                if res.get("text"):
+                    kb = self._build_keyboard(res.get("buttons", []))
+                    await call.message.answer(res["text"], parse_mode="Markdown", reply_markup=kb)
+
+            elif data.startswith("accuse_execute:"):
+                parts = data.split(":")
+                case_id = parts[1] if len(parts) > 1 else ""
+                accused_id = parts[2] if len(parts) > 2 else ""
+                res = await self._call_hub_api(call.from_user, action="accuse_execute", case_id=case_id, accused_bot_id=accused_id)
+                if res.get("text"):
+                    kb = self._build_keyboard(res.get("buttons", []))
+                    await call.message.answer(res["text"], parse_mode="Markdown", reply_markup=kb)
+
+            elif data.startswith("pay_case:"):
+                case_id = data.replace("pay_case:", "")
+                res = await self._call_hub_api(call.from_user, action="stars_paid", case_id=case_id)
+                if res.get("message") or res.get("text"):
+                    kb = self._build_keyboard(res.get("buttons", []))
+                    await call.message.answer(res.get("text") or res.get("message"), parse_mode="Markdown", reply_markup=kb)
 
         @self.dp.message()
         async def hub_text(message: Message):
             if not message.text:
                 return
-            
-            # Text is treated as Accusation argument
-            res = await self._call_hub_api(message.from_user, action="submit_accusation", accusation_reason=message.text)
-            verdict = res.get("verdictText")
-            if verdict:
-                chunks = split_message(verdict)
-                for chunk in chunks:
-                    await message.answer(chunk)
-            else:
-                await message.answer("Для выбора дел используйте команду /start или /cases")
+
+            res = await self._call_hub_api(message.from_user, action="chat", user_message=message.text)
+            if res.get("text"):
+                kb = self._build_keyboard(res.get("buttons", []))
+                chunks = split_message(res["text"])
+                for i, chunk in enumerate(chunks):
+                    is_last = (i == len(chunks) - 1)
+                    await message.answer(chunk, parse_mode="Markdown", reply_markup=kb if is_last else None)
 
     def _register_suspect_handlers(self):
         """Обработчики для Ботов-Подозреваемых (Допрос)"""

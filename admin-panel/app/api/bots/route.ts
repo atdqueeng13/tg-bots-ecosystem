@@ -123,6 +123,7 @@ export async function POST(req: NextRequest) {
         token: cleanToken,
         avatarUrl: finalAvatarUrl,
         role: role || (isMainHub ? 'Игровой Мастер' : 'Подозреваемый'),
+        orderIndex: body.orderIndex !== undefined ? parseInt(body.orderIndex) : 0,
         isMainHub: !!isMainHub,
         isGuilty: !!isGuilty,
         secretAlibi: secretAlibi || '',
