@@ -47,11 +47,12 @@ function splitMessage(text: string, maxLength = 4000): string[] {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { botId: string } }
+  { params }: { params: any }
 ) {
   try {
-    const { botId } = params;
-    const update = await req.json();
+    const resolvedParams = await Promise.resolve(params);
+    const pathBotId = req.nextUrl.pathname.split('/').pop() || '';
+    const botId = resolvedParams?.botId || pathBotId;
 
     const bot = await prisma.bot.findFirst({
       where: {
@@ -62,9 +63,11 @@ export async function POST(
     });
 
     if (!bot || !bot.token) {
+      console.warn('Bot not found for botId:', botId);
       return NextResponse.json({ error: 'Bot not found or inactive' }, { status: 404 });
     }
 
+    const update = await req.json();
     const message = update.message;
     const callbackQuery = update.callback_query;
 

@@ -69,16 +69,7 @@ export const realtimeDb = (): Database | null => {
 /**
  * Утилита прямой записи в Firebase Realtime Database по REST API
  */
-export async function syncToFirebaseRTDB(path: string, data: any) {
-  try {
-    const cleanPath = path.replace(/^\/+/, '').replace(/\.json$/, '');
-    const url = `${FIREBASE_DATABASE_URL}/${cleanPath}.json`;
-    await fetch(url, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-  } catch (err) {
-    console.error(`Firebase RTDB sync error for ${path}:`, err);
-  }
+export async function syncToFirebaseRTDB(_path: string, _data: any) {
+  // Firebase disabled - using Supabase PostgreSQL directly
+  return Promise.resolve();
 }
