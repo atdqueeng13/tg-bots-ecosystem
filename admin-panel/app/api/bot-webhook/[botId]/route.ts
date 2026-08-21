@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { handleHubRuntime, HubRuntimeResult } from '@/lib/hub-runtime';
+import { handleDialogueRuntime } from '@/lib/dialogue-runtime';
 
-// Helper to send Telegram API requests
+// Helper to call Telegram Bot API
 async function telegramCall(token: string, method: string, payload: Record<string, any>) {
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
@@ -16,9 +18,9 @@ async function telegramCall(token: string, method: string, payload: Record<strin
   }
 }
 
-// Split long messages (>4000 characters)
+// Split long messages if needed (>4000 characters)
 function splitMessage(text: string, maxLength = 4000): string[] {
-  if (text.length <= maxLength) return [text];
+  if (!text || text.length <= maxLength) return [text || ''];
 
   const chunks: string[] = [];
   let current = '';
@@ -32,7 +34,6 @@ function splitMessage(text: string, maxLength = 4000): string[] {
       if (p.length <= maxLength) {
         current = p;
       } else {
-        // Hard slice very long single paragraphs
         for (let i = 0; i < p.length; i += maxLength) {
           chunks.push(p.substring(i, i + maxLength));
         }
@@ -46,15 +47,15 @@ function splitMessage(text: string, maxLength = 4000): string[] {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: Promise<{ botId: string }> }
+  { params }: { params: { botId: string } }
 ) {
   try {
-    const { botId } = await params;
+    const { botId } = params;
     const update = await req.json();
 
     const bot = await prisma.bot.findFirst({
       where: {
-        OR: [{ id: botId }, { botId }],
+        OR: [{ id: botId }, { botId: botId }],
         isActive: true,
       },
       include: { group: true },
@@ -71,302 +72,274 @@ export async function POST(
     const chatId = message?.chat?.id || callbackQuery?.message?.chat?.id;
 
     if (!fromUser || !chatId) {
-      return NextResponse.json({ ok: true }); // Acknowledge other updates
+      return NextResponse.json({ ok: true });
     }
 
     const telegramId = String(fromUser.id);
-    const username = fromUser.username || null;
+    const username = fromUser.username ? `@${fromUser.username}` : null;
     const firstName = fromUser.first_name || null;
     const lastName = fromUser.last_name || null;
-    // Derive dynamic application base URL from incoming request
-    const reqHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || process.env.VERCEL_URL || '';
-    const reqProto = req.headers.get('x-forwarded-proto') || (reqHost.includes('localhost') ? 'http' : 'https');
-    const appUrl = reqHost
-      ? `${reqProto}://${reqHost}`
-      : (process.env.NEXTAUTH_URL || process.env.PUBLIC_APP_URL || 'https://admin-panel-gilt-three.vercel.app');
 
-    // --- 1. MAIN GAME HUB BOT HANDLING ---
-    if (bot.isMainHub) {
-      // Helper to dispatch hub message with photo or text
-      const sendHubPayload = async (hubData: any) => {
-        if (!hubData?.text && !hubData?.mediaUrl) return;
+    // Helper to send Hub payload to Telegram
+    const dispatchHubResponse = async (hubData: HubRuntimeResult) => {
+      if (!hubData?.text && !hubData?.mediaUrl) return;
 
-        const inlineKeyboard =
-          hubData.buttons?.map((b: any) => [
-            b.url ? { text: b.text, url: b.url } : { text: b.text, callback_data: b.callback_data },
-          ]) || [];
+      const inlineKeyboard =
+        hubData.buttons?.map((b) => [
+          b.url ? { text: b.text, url: b.url } : { text: b.text, callback_data: b.callback_data || '' },
+        ]) || [];
 
-        // If delay is configured
-        if (hubData.delaySeconds && hubData.delaySeconds > 0) {
-          await new Promise((resolve) => setTimeout(resolve, Math.min(hubData.delaySeconds, 5) * 1000));
-        }
+      // Handle optional delay
+      if (hubData.delaySeconds && hubData.delaySeconds > 0) {
+        await new Promise((resolve) => setTimeout(resolve, Math.min(hubData.delaySeconds || 0, 3) * 1000));
+      }
 
-        if (hubData.mediaUrl && hubData.mediaUrl.startsWith('http')) {
-          await telegramCall(bot.token, 'sendPhoto', {
-            chat_id: chatId,
-            photo: hubData.mediaUrl,
-            caption: hubData.text,
-            parse_mode: 'Markdown',
-            reply_markup: inlineKeyboard.length > 0 ? { inline_keyboard: inlineKeyboard } : undefined,
-          });
-        } else {
+      if (hubData.mediaUrl && hubData.mediaUrl.startsWith('http')) {
+        await telegramCall(bot.token, 'sendPhoto', {
+          chat_id: chatId,
+          photo: hubData.mediaUrl,
+          caption: hubData.text || '',
+          parse_mode: 'Markdown',
+          reply_markup: inlineKeyboard.length > 0 ? { inline_keyboard: inlineKeyboard } : undefined,
+        });
+      } else {
+        const chunks = splitMessage(hubData.text || '');
+        for (let i = 0; i < chunks.length; i++) {
+          const isLast = i === chunks.length - 1;
           await telegramCall(bot.token, 'sendMessage', {
             chat_id: chatId,
-            text: hubData.text,
+            text: chunks[i],
             parse_mode: 'Markdown',
-            reply_markup: inlineKeyboard.length > 0 ? { inline_keyboard: inlineKeyboard } : undefined,
+            reply_markup: isLast && inlineKeyboard.length > 0 ? { inline_keyboard: inlineKeyboard } : undefined,
           });
         }
-      };
+      }
+    };
 
-      // Handle Callback Queries (Buttons)
+    // ========================================================
+    // 1. MAIN GAME HUB BOT HANDLING
+    // ========================================================
+    if (bot.isMainHub) {
+      // A) Handle Callback Queries (Buttons)
       if (callbackQuery) {
-        const data = callbackQuery.data;
+        const data = callbackQuery.data || '';
         await telegramCall(bot.token, 'answerCallbackQuery', {
           callback_query_id: callbackQuery.id,
         });
 
+        // 1. Funnel Onboarding Next Step
         if (data.startsWith('funnel_step:')) {
           const stepIndex = parseInt(data.replace('funnel_step:', '')) || 0;
-          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              telegramId,
-              username,
-              firstName,
-              lastName,
-              action: 'funnel_step',
-              stepIndex,
-            }),
+          const result = await handleHubRuntime({
+            telegramId,
+            username,
+            firstName,
+            lastName,
+            action: 'funnel_step',
+            stepIndex,
           });
-          const hubData = await hubRes.json();
-          await sendHubPayload(hubData);
+          await dispatchHubResponse(result);
           return NextResponse.json({ ok: true });
         }
 
+        // 2. Cases Catalog
         if (data === 'hub:cases' || data === 'cases') {
-          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              telegramId,
-              username,
-              firstName,
-              lastName,
-              action: 'cases',
-            }),
+          const result = await handleHubRuntime({
+            telegramId,
+            username,
+            firstName,
+            lastName,
+            action: 'cases',
           });
-          const hubData = await hubRes.json();
-          await sendHubPayload(hubData);
+          await dispatchHubResponse(result);
           return NextResponse.json({ ok: true });
         }
 
+        // 3. Select Case / Dossier
         if (data.startsWith('case:')) {
           const caseId = data.replace('case:', '');
-          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              telegramId,
-              username,
-              firstName,
-              lastName,
-              action: 'select_case',
-              caseId,
-            }),
+          const result = await handleHubRuntime({
+            telegramId,
+            username,
+            firstName,
+            lastName,
+            action: 'select_case',
+            caseId,
           });
-          const hubData = await hubRes.json();
-          await sendHubPayload(hubData);
+          await dispatchHubResponse(result);
           return NextResponse.json({ ok: true });
         }
 
+        // 4. Pay / Unlock Case
+        if (data.startsWith('pay_case:')) {
+          const caseId = data.replace('pay_case:', '');
+          const result = await handleHubRuntime({
+            telegramId,
+            username,
+            firstName,
+            lastName,
+            action: 'stars_paid',
+            caseId,
+          });
+          await dispatchHubResponse(result);
+          return NextResponse.json({ ok: true });
+        }
+
+        // 5. Accuse Select Menu
         if (data.startsWith('accuse_menu:')) {
           const caseId = data.replace('accuse_menu:', '');
-          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              telegramId,
-              action: 'accuse_select',
-              caseId,
-            }),
+          const result = await handleHubRuntime({
+            telegramId,
+            username,
+            firstName,
+            lastName,
+            action: 'accuse_select',
+            caseId,
           });
-          const hubData = await hubRes.json();
-          await sendHubPayload(hubData);
+          await dispatchHubResponse(result);
           return NextResponse.json({ ok: true });
         }
 
-        if (data.startsWith('accuse_confirm:') || data.startsWith('accuse_bot:')) {
+        // 6. Accuse Confirmation Prompt
+        if (data.startsWith('accuse_confirm:')) {
           const parts = data.split(':');
           const caseId = parts[1];
           const accusedBotId = parts[2];
-          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              telegramId,
-              action: 'accuse_confirm',
-              caseId,
-              accusedBotId,
-            }),
+          const result = await handleHubRuntime({
+            telegramId,
+            username,
+            firstName,
+            lastName,
+            action: 'accuse_confirm',
+            caseId,
+            accusedBotId,
           });
-          const hubData = await hubRes.json();
-          await sendHubPayload(hubData);
+          await dispatchHubResponse(result);
           return NextResponse.json({ ok: true });
         }
 
+        // 7. Accuse Final Execution
         if (data.startsWith('accuse_execute:')) {
           const parts = data.split(':');
           const caseId = parts[1];
           const accusedBotId = parts[2];
-          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              telegramId,
-              action: 'accuse_execute',
-              caseId,
-              accusedBotId,
-            }),
+          const result = await handleHubRuntime({
+            telegramId,
+            username,
+            firstName,
+            lastName,
+            action: 'accuse_execute',
+            caseId,
+            accusedBotId,
           });
-          const hubData = await hubRes.json();
-          await sendHubPayload(hubData);
-          return NextResponse.json({ ok: true });
-        }
-
-        if (data.startsWith('pay_case:')) {
-          const caseId = data.replace('pay_case:', '');
-          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              telegramId,
-              action: 'stars_paid',
-              caseId,
-            }),
-          });
-          const hubData = await hubRes.json();
-          await sendHubPayload(hubData);
+          await dispatchHubResponse(result);
           return NextResponse.json({ ok: true });
         }
       }
 
-      // Handle Text Messages / Commands
+      // B) Handle Text Messages & Commands
       if (message?.text) {
         const text = message.text.trim();
 
-        if (text === '/start' || text.startsWith('/start case_')) {
-          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              telegramId,
-              username,
-              firstName,
-              lastName,
-              action: 'start',
-            }),
+        // 1. /start command
+        if (text === '/start' || text.startsWith('/start case_') || text.startsWith('/start')) {
+          const result = await handleHubRuntime({
+            telegramId,
+            username,
+            firstName,
+            lastName,
+            action: 'start',
           });
-          const hubData = await hubRes.json();
-          await sendHubPayload(hubData);
+          await dispatchHubResponse(result);
           return NextResponse.json({ ok: true });
         }
 
+        // 2. /cases or /menu command
         if (text === '/cases' || text === '/menu') {
-          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              telegramId,
-              username,
-              firstName,
-              lastName,
-              action: 'cases',
-            }),
+          const result = await handleHubRuntime({
+            telegramId,
+            username,
+            firstName,
+            lastName,
+            action: 'cases',
           });
-          const hubData = await hubRes.json();
-          await sendHubPayload(hubData);
+          await dispatchHubResponse(result);
           return NextResponse.json({ ok: true });
         }
 
+        // 3. /accuse command
         if (text === '/accuse') {
-          const hubRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              telegramId,
-              action: 'accuse_select',
-            }),
+          const result = await handleHubRuntime({
+            telegramId,
+            username,
+            firstName,
+            lastName,
+            action: 'accuse_select',
           });
-          const hubData = await hubRes.json();
-          await sendHubPayload(hubData);
+          await dispatchHubResponse(result);
           return NextResponse.json({ ok: true });
         }
 
-        // Freeform message to Main Hub Bot -> processed by Funnel Lock, Accusation or AI Chief
+        // 4. Freeform chat with Main Hub Chief Assistant
         await telegramCall(bot.token, 'sendChatAction', {
           chat_id: chatId,
           action: 'typing',
         });
 
-        const chatRes = await fetch(`${appUrl}/api/bot-runtime/hub`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            telegramId,
-            username,
-            firstName,
-            lastName,
-            action: 'chat',
-            userMessage: text,
-          }),
+        const result = await handleHubRuntime({
+          telegramId,
+          username,
+          firstName,
+          lastName,
+          action: 'chat',
+          userMessage: text,
         });
-        const chatData = await chatRes.json();
-        await sendHubPayload(chatData);
+        await dispatchHubResponse(result);
         return NextResponse.json({ ok: true });
       }
 
       return NextResponse.json({ ok: true });
     }
 
-    // --- 2. SUSPECT BOT INTERROGATION HANDLING ---
+    // ========================================================
+    // 2. SUSPECT BOT INTERROGATION HANDLING
+    // ========================================================
     if (message?.text) {
-      // Send typing action
+      const text = message.text.trim();
+
+      // Show typing indicator
       await telegramCall(bot.token, 'sendChatAction', {
         chat_id: chatId,
         action: 'typing',
       });
 
-      const dialogueRes = await fetch(`${appUrl}/api/bot-runtime/dialogue`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          botId: bot.id,
-          telegramId,
-          username,
-          firstName,
-          lastName,
-          userMessage: message.text,
-          generateResponse: true,
-        }),
+      // Execute in-memory suspect dialogue
+      const dialogueResult = await handleDialogueRuntime({
+        botId: bot.id,
+        telegramId,
+        username,
+        firstName,
+        lastName,
+        userMessage: text,
       });
 
-      const data = await dialogueRes.json();
-      const botResponse = data.botResponse || '[Подозреваемый молчит и нервно курит]';
+      const replyText = dialogueResult.botResponse || 'Я внимательно слушаю ваш вопрос, детектив.';
+      const chunks = splitMessage(replyText);
 
-      const chunks = splitMessage(botResponse);
       for (const chunk of chunks) {
         await telegramCall(bot.token, 'sendMessage', {
           chat_id: chatId,
           text: chunk,
+          parse_mode: 'Markdown',
         });
       }
+
+      return NextResponse.json({ ok: true });
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err: any) {
-    console.error('Webhook error:', err);
-    return NextResponse.json({ error: err?.message }, { status: 500 });
+  } catch (error: any) {
+    console.error('Webhook error:', error);
+    return NextResponse.json({ error: error?.message || 'Webhook internal error' }, { status: 500 });
   }
 }

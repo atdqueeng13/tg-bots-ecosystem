@@ -76,6 +76,24 @@ export function HubClient({ initialHubBot, cases }: Props) {
     setActivePreviewStep(steps.length);
   };
 
+  // Clone / Duplicate a step
+  const handleCloneStep = (index: number) => {
+    const stepToClone = steps[index];
+    if (!stepToClone) return;
+    const clonedStep: FunnelStep = {
+      ...stepToClone,
+      id: `step_${Date.now()}`,
+      stepIndex: index + 1,
+    };
+    const updated = [...steps.slice(0, index + 1), clonedStep, ...steps.slice(index + 1)].map((s, i) => ({
+      ...s,
+      stepIndex: i,
+    }));
+    setSteps(updated);
+    setActivePreviewStep(index + 1);
+    showToast(`Шаг #${index + 1} успешно продублирован!`);
+  };
+
   // Remove a step
   const handleRemoveStep = (index: number) => {
     if (steps.length <= 1) {
@@ -431,10 +449,21 @@ export function HubClient({ initialHubBot, cases }: Props) {
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          handleCloneStep(index);
+                        }}
+                        title="Клонировать / Дублировать шаг"
+                        className="p-1 rounded text-on-surface-variant hover:text-amber-400 hover:bg-amber-400/10 transition-colors ml-1"
+                      >
+                        <span className="material-symbols-outlined text-sm">content_copy</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
                           handleRemoveStep(index);
                         }}
                         title="Удалить шаг"
-                        className="p-1 rounded text-error hover:bg-error/10 ml-2"
+                        className="p-1 rounded text-error hover:bg-error/10 ml-1"
                       >
                         <span className="material-symbols-outlined text-sm">delete</span>
                       </button>
