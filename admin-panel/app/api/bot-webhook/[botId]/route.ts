@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { handleHubRuntime, HubRuntimeResult } from '@/lib/hub-runtime';
 import { handleDialogueRuntime } from '@/lib/dialogue-runtime';
 
-// Helper to call Telegram Bot API
+// Helper to call Telegram Bot API with automatic Markdown fallback
 async function telegramCall(token: string, method: string, payload: Record<string, any>) {
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
@@ -11,10 +11,24 @@ async function telegramCall(token: string, method: string, payload: Record<strin
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    return await res.json();
-  } catch (err) {
-    console.error(`Telegram API ${method} error:`, err);
-    return { ok: false, error: err };
+    const data = await res.json();
+
+    // If Telegram fails due to Markdown entity parsing, automatically retry as plain text
+    if (!data.ok && typeof data.description === 'string' && data.description.includes('can\'t parse entities') && payload.parse_mode) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.parse_mode;
+      const retryRes = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fallbackPayload),
+      });
+      return await retryRes.json();
+    }
+
+    return data;
+  } catch (err: any) {
+    console.error(`Telegram API ${method} network error:`, err);
+    return { ok: false, error: err?.message || String(err) };
   }
 }
 
@@ -343,6 +357,9 @@ export async function POST(
     return NextResponse.json({ ok: true });
   } catch (error: any) {
     console.error('Webhook error:', error);
-    return NextResponse.json({ error: error?.message || 'Webhook internal error' }, { status: 500 });
+    return NextResponse.json({
+      error: error?.message || 'Webhook internal error',
+      stack: error?.stack,
+    }, { status: 500 });
   }
 }
