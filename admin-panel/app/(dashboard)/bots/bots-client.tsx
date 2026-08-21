@@ -5,12 +5,15 @@ import { useState, useEffect } from 'react';
 interface Props {
   initialBots: any[];
   groups?: any[];
+  defaultModel?: string;
 }
 
-export function BotsClient({ initialBots, groups = [] }: Props) {
+export function BotsClient({ initialBots, groups = [], defaultModel = 'gemini-3.6-flash' }: Props) {
   const [bots, setBots] = useState(initialBots);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBot, setSelectedBot] = useState<any | null>(null);
+  const [botToDelete, setBotToDelete] = useState<any | null>(null);
+  const [deletingBot, setDeletingBot] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [showToken, setShowToken] = useState(false);
@@ -54,14 +57,13 @@ export function BotsClient({ initialBots, groups = [] }: Props) {
     avatarUrl: '',
     role: 'Подозреваемый',
     groupId: '',
-    model: 'gemini-3.6-flash',
+    model: defaultModel || 'gemini-3.6-flash',
     temperature: 0.7,
     reasoningEnabled: false,
     isActive: true,
     isMainHub: false,
     orderIndex: 0,
     isGuilty: false,
-    secretAlibi: '',
     prompt: '',
   });
 
@@ -169,7 +171,6 @@ export function BotsClient({ initialBots, groups = [] }: Props) {
       isMainHub: !!bot.isMainHub,
       orderIndex: bot.orderIndex !== undefined ? bot.orderIndex : 0,
       isGuilty: !!bot.isGuilty,
-      secretAlibi: bot.secretAlibi || '',
       prompt: bot.prompt || '',
     });
 
@@ -207,14 +208,13 @@ export function BotsClient({ initialBots, groups = [] }: Props) {
       avatarUrl: '',
       role: forMainHub ? 'Игровой Мастер (Хаб)' : 'Подозреваемый',
       groupId: forMainHub ? '' : groups[0]?.id || '',
-      model: availableModels[0] || 'gemini-3.6-flash',
+      model: defaultModel || availableModels[0] || 'gemini-3.6-flash',
       temperature: 0.7,
       reasoningEnabled: false,
       isActive: true,
       isMainHub: forMainHub,
       orderIndex: 0,
       isGuilty: false,
-      secretAlibi: '',
       prompt: forMainHub
         ? `🕵️‍♂️ *Добро пожаловать в Детективное Бюро!*\n\nПеред вами архив нераскрытых дел. Выберите расследование, чтобы изучить материалы, допросить подозреваемых и раскрыть преступление.`
         : '',
@@ -301,18 +301,25 @@ export function BotsClient({ initialBots, groups = [] }: Props) {
     }
   };
 
-  const handleDeleteBot = async () => {
-    if (!selectedBot) return;
-    if (!confirm(`Вы действительно хотите удалить бота "${selectedBot.name}"?`)) return;
-
+  const confirmDeleteBot = async (bot: any) => {
+    if (!bot) return;
+    setDeletingBot(true);
     try {
-      const res = await fetch(`/api/bots/${selectedBot.id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Ошибка удаления');
-      setBots(bots.filter((b) => b.id !== selectedBot.id));
-      handleCloseModal();
-      showToast('Бот удален.');
+      const res = await fetch(`/api/bots/${bot.id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Ошибка удаления из базы данных');
+      }
+      setBots((prev) => prev.filter((b) => b.id !== bot.id));
+      setBotToDelete(null);
+      if (selectedBot?.id === bot.id) {
+        handleCloseModal();
+      }
+      showToast(`Подозреваемый «${bot.name}» успешно удален.`);
     } catch (err: any) {
       alert(err.message || 'Ошибка удаления');
+    } finally {
+      setDeletingBot(false);
     }
   };
 
@@ -617,6 +624,18 @@ export function BotsClient({ initialBots, groups = [] }: Props) {
                   >
                     <span className="material-symbols-outlined text-[18px]">edit</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setBotToDelete(bot);
+                    }}
+                    title="Удалить бота"
+                    className="p-1.5 rounded text-on-surface-variant hover:text-red-400 hover:bg-red-500/10 transition-all"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -915,39 +934,16 @@ export function BotsClient({ initialBots, groups = [] }: Props) {
                     </div>
 
                     <textarea
-                      rows={formData.isMainHub ? 6 : 8}
+                      rows={formData.isMainHub ? 6 : 12}
                       value={formData.prompt}
                       onChange={(e) => setFormData({ ...formData, prompt: e.target.value })}
                       placeholder={
                         formData.isMainHub
                           ? '🕵️‍♂️ Добро пожаловать в Детективное Бюро! Опишите воронку входа для игрока...'
-                          : 'Опиши характер персонажа, отношения с жертвой и официальное алиби на вечер...'
+                          : 'Опиши характер персонажа, отношения с жертвой, алиби, поведение под давлением и реакцию на улики...'
                       }
                       className="w-full bg-[#1a1a1a] border border-[#333333] rounded focus:border-primary-container text-[#ffffff] font-mono-code text-xs p-4 leading-relaxed resize-y transition-colors outline-none"
                     />
-
-                    {/* Secret Alibi field for suspects */}
-                    {!formData.isMainHub && (
-                      <div className="mt-2">
-                        <label className="block font-label-caps text-xs text-amber-300 font-bold mb-1 flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-sm">lock_open</span>
-                          {formData.isGuilty
-                            ? 'Нелепая ложь при расколе (для настоящего убийцы):'
-                            : 'Настоящий секрет при расколе (для невиновного):'}
-                        </label>
-                        <textarea
-                          rows={3}
-                          value={formData.secretAlibi}
-                          onChange={(e) => setFormData({ ...formData, secretAlibi: e.target.value })}
-                          placeholder={
-                            formData.isGuilty
-                              ? 'Я был там, но просто уронил карманные часы на ковер в темноте!'
-                              : 'Да, я соврал, потому что тайком брал деньги из сейфа, но я не убивал!'
-                          }
-                          className="w-full bg-[#1a1a1a] border border-amber-500/30 rounded focus:border-amber-400 text-amber-100 font-mono-code text-xs p-3 leading-relaxed resize-y transition-colors outline-none"
-                        />
-                      </div>
-                    )}
                   </section>
 
                   {/* Section 4: Dialogue Logs */}
@@ -982,10 +978,10 @@ export function BotsClient({ initialBots, groups = [] }: Props) {
             {/* Modal Footer */}
             <div className="p-4 px-6 border-t border-[#333333] bg-[#242424] flex items-center justify-between shrink-0">
               <div>
-                {!isCreating && (
+                {!isCreating && selectedBot && (
                   <button
                     type="button"
-                    onClick={handleDeleteBot}
+                    onClick={() => setBotToDelete(selectedBot)}
                     className="text-error hover:underline text-xs font-semibold flex items-center gap-1"
                   >
                     <span className="material-symbols-outlined text-sm">delete</span>
@@ -1126,6 +1122,46 @@ export function BotsClient({ initialBots, groups = [] }: Props) {
               >
                 <span>Отправить</span>
                 <span className="material-symbols-outlined text-sm">send</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {botToDelete && (
+        <div
+          aria-modal="true"
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm z-[70] flex items-center justify-center p-4"
+          role="dialog"
+        >
+          <div className="bg-[#242424] border border-[#333333] rounded-xl max-w-md w-full p-6 shadow-2xl flex flex-col gap-4 modal-animate">
+            <div className="flex items-center gap-3 text-red-400 border-b border-[#333333] pb-3">
+              <span className="material-symbols-outlined text-3xl text-red-500">delete_forever</span>
+              <div>
+                <h3 className="font-title-md text-base font-bold text-white">Удалить бота?</h3>
+                <p className="text-xs text-on-surface-variant">Подтверждение удаления персонажа</p>
+              </div>
+            </div>
+            <p className="text-sm text-on-surface-variant leading-relaxed">
+              Вы действительно хотите удалить <strong className="text-white">«{botToDelete.name}»</strong>? Персонаж и вся история его диалогов будут удалены из базы данных.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setBotToDelete(null)}
+                className="px-4 py-2 rounded bg-[#333333] hover:bg-[#444444] text-xs font-semibold text-white transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmDeleteBot(botToDelete)}
+                disabled={deletingBot}
+                className="px-4 py-2 rounded bg-red-600 hover:bg-red-500 text-xs font-bold text-white transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+                {deletingBot ? 'Удаление...' : 'Да, удалить'}
               </button>
             </div>
           </div>

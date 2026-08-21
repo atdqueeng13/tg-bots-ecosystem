@@ -78,10 +78,6 @@ export function buildCascadedSystemPrompt(
     botParts.push(bot.prompt.trim());
   }
 
-  if (bot.secretAlibi && bot.secretAlibi.trim() && !bot.prompt?.includes(bot.secretAlibi.trim())) {
-    botParts.push(`ДОПОЛНИТЕЛЬНОЕ СЕКРЕТНОЕ АЛИБИ / РАСКОЛ:\n${bot.secretAlibi.trim()}`);
-  }
-
   parts.push(`=== ПРОМПТ ПЕРСОНАЖА ===\n${botParts.join('\n\n')}`);
 
   // 4. Live Interrogation Dossier & Progress Context
