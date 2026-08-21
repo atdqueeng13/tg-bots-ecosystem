@@ -1,7 +1,9 @@
 # Environment variables and secrets (CRITICAL: Never commit tokens!)
 .env
+.env.*
 .env.local
 *.env
+_env*
 *.db
 *.sqlite
 *.sqlite3

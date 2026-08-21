@@ -1,14 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,8 +26,8 @@ export default function LoginPage() {
         throw new Error(data.error || 'Ошибка авторизации');
       }
 
-      router.push('/');
-      router.refresh();
+      // Hard redirect to reload session cookie properly
+      window.location.href = '/';
     } catch (err: any) {
       setError(err.message || 'Ошибка авторизации');
     } finally {
@@ -37,110 +36,118 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-gutter bg-background relative overflow-hidden">
-      {/* Noise background */}
-      <div className="fixed inset-0 noise-bg z-0 opacity-40 pointer-events-none" />
-
-      <main className="w-full max-w-[420px] bg-surface border border-outline-variant rounded-lg p-section-margin z-10 flex flex-col relative shadow-[0_20px_25px_-5px_rgba(0,0,0,0.5)]">
-        {/* Brand Header */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="relative w-16 h-16 flex items-center justify-center bg-surface-container-low rounded-lg border border-outline-variant mb-4">
-            <span
-              className="material-symbols-outlined text-4xl text-secondary"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
-              person_search
-            </span>
+    <div className="bg-background text-on-background min-h-screen flex items-center justify-center p-4">
+      <div className="w-full max-w-[400px]">
+        {/* Login Card */}
+        <div className="bg-[#242424] border border-[#333333] rounded-lg p-8 shadow-2xl">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <h1 className="font-display-lg text-display-lg text-primary-container mb-1 font-bold">
+              Sherlock
+            </h1>
+            <h2 className="font-title-sm text-title-sm text-on-surface-variant font-medium">
+              Admin Panel
+            </h2>
           </div>
-          <h1 className="font-headline-lg text-headline-lg text-on-surface tracking-tight text-center">
-            Реестр Улик
-          </h1>
-          <p className="font-label-caps text-label-caps text-secondary mt-2 uppercase tracking-widest text-[11px]">
-            Только авторизованный доступ
-          </p>
-        </div>
 
-        {error && (
-          <div className="mb-6 p-3 bg-error-container/20 border border-error text-error text-xs font-data-mono rounded">
-            {error}
-          </div>
-        )}
-
-        {/* Login Form */}
-        <form onSubmit={handleLogin} className="flex flex-col gap-6">
-          <div className="relative flex flex-col">
-            <label
-              className="font-label-caps text-label-caps text-outline mb-2 uppercase tracking-widest text-[11px]"
-              htmlFor="email"
-            >
-              ID Оперативника / Email
-            </label>
-            <div className="relative flex items-center">
-              <input
-                id="email"
-                type="text"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@registry.gov"
-                required
-                className="w-full h-12 pl-3 pr-10 font-data-mono text-data-mono text-sm bg-surface-container-low border border-outline-variant text-on-surface rounded-DEFAULT focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-all"
-              />
-              <span className="material-symbols-outlined absolute right-3 pointer-events-none text-outline text-[20px]">
-                fingerprint
-              </span>
+          {error && (
+            <div className="mb-6 p-3 bg-red-950/40 border border-red-500/50 text-red-300 text-xs font-mono-code rounded">
+              {error}
             </div>
-          </div>
+          )}
 
-          <div className="relative flex flex-col">
-            <div className="flex justify-between items-end mb-2">
+          {/* Form */}
+          <form onSubmit={handleLogin} className="space-y-4">
+            {/* Email Field */}
+            <div>
               <label
-                className="font-label-caps text-label-caps text-outline uppercase tracking-widest text-[11px]"
+                className="block font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase text-xs"
+                htmlFor="email"
+              >
+                EMAIL / ЛОГИН
+              </label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 text-on-surface-variant flex items-center justify-center pointer-events-none">
+                  <span className="material-symbols-outlined text-[18px]">mail</span>
+                </span>
+                <input
+                  id="email"
+                  type="text"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="lasleywork"
+                  required
+                  className="w-full bg-[#1a1a1a] border border-[#333333] text-white font-body-base text-sm rounded pl-10 pr-4 py-2.5 transition-colors placeholder:text-on-surface-variant/50 focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Password Field */}
+            <div>
+              <label
+                className="block font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase text-xs"
                 htmlFor="password"
               >
-                Код Доступа
+                ПАРОЛЬ
               </label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3 text-on-surface-variant flex items-center justify-center pointer-events-none">
+                  <span className="material-symbols-outlined text-[18px]">lock</span>
+                </span>
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  required
+                  className="w-full bg-[#1a1a1a] border border-[#333333] text-white font-body-base text-sm rounded pl-10 pr-10 py-2.5 transition-colors placeholder:text-on-surface-variant/50 focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 text-on-surface-variant hover:text-white transition-colors cursor-pointer flex items-center justify-center"
+                >
+                  <span className="material-symbols-outlined text-[18px]">
+                    {showPassword ? 'visibility_off' : 'visibility'}
+                  </span>
+                </button>
+              </div>
             </div>
-            <div className="relative flex items-center">
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="w-full h-12 pl-3 pr-10 font-data-mono text-data-mono tracking-widest text-sm bg-surface-container-low border border-outline-variant text-on-surface rounded-DEFAULT focus:outline-none focus:border-secondary focus:ring-1 focus:ring-secondary transition-all"
-              />
-              <span className="material-symbols-outlined absolute right-3 pointer-events-none text-outline text-[20px]">
-                key
-              </span>
+
+            {/* Submit Button */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-primary-container text-[#1a1a1a] font-title-sm text-sm py-3 px-4 rounded font-bold transition-all hover:opacity-90 active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 shadow-[0_0_15px_rgba(255,191,0,0.15)]"
+              >
+                <span>{loading ? 'Проверка...' : 'Войти'}</span>
+                <span className="material-symbols-outlined text-[18px]">login</span>
+              </button>
             </div>
-          </div>
+          </form>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="mt-4 h-12 w-full bg-secondary text-surface-container-lowest font-title-md text-title-md font-bold rounded-DEFAULT hover:bg-secondary-fixed-dim transition-colors flex items-center justify-center gap-2 shadow-[0_4px_14px_0_rgba(245,158,11,0.2)] disabled:opacity-50"
-          >
-            <span>{loading ? 'ПРОВЕРКА ДОСТУПА...' : 'Войти'}</span>
-            <span className="material-symbols-outlined text-[20px]">login</span>
-          </button>
-        </form>
-
-        {/* Footer info */}
-        <div className="mt-8 pt-4 border-t border-outline-variant border-dashed flex justify-between items-center opacity-80">
-          <span className="font-data-mono text-data-mono text-[10px] text-outline">
-            СИСТЕМА: v2.4.1 (VERCEL)
-          </span>
-          <div className="flex gap-1">
-            <span className="w-2 h-2 rounded-full bg-secondary animate-pulse" />
-            <span className="w-2 h-2 rounded-full bg-surface-container-highest" />
-            <span className="w-2 h-2 rounded-full bg-surface-container-highest" />
+          {/* Additional Link */}
+          <div className="mt-6 text-center">
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                alert('Используйте логин: lasleywork и пароль: Danyap0l4ndbot615!');
+              }}
+              className="font-body-base text-xs text-on-surface-variant hover:text-primary-container transition-colors inline-flex items-center gap-1"
+            >
+              Забыли пароль?
+            </a>
           </div>
-          <span className="font-data-mono text-data-mono text-[10px] text-secondary uppercase">
-            Соединение: Защищено
-          </span>
         </div>
-      </main>
+
+        {/* Footer / Version Info */}
+        <div className="mt-6 text-center text-on-surface-variant/50 font-mono-code text-xs">
+          v 2.4.1 (Stable)
+        </div>
+      </div>
     </div>
   );
 }

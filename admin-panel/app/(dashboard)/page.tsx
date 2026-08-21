@@ -10,52 +10,76 @@ export default async function DashboardPage() {
 
   let totalBots = 0;
   let activeBots = 0;
-  let totalUsers = 0;
+  let requestsToday = 0;
+  let requestsMonth = 0;
   let recentLogs: any[] = [];
-  let apiLatency = 124;
+  let initialKeyRecord: any = null;
 
   try {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
     const [
       bCount,
       abCount,
-      uCount,
+      todayCount,
+      monthCount,
       logs,
-      activeApiKey,
+      keyRecord,
     ] = await Promise.all([
       prisma.bot.count(),
-      prisma.bot.count({ where: { status: 'ACTIVE' } }),
-      prisma.telegramUser.count(),
+      prisma.bot.count({ where: { status: 'ACTIVE', isActive: true } }),
+      prisma.userDialogueLog.count({ where: { createdAt: { gte: startOfToday } } }),
+      prisma.userDialogueLog.count({ where: { createdAt: { gte: startOfMonth } } }),
       prisma.userDialogueLog.findMany({
-        take: 8,
+        take: 10,
         orderBy: { createdAt: 'desc' },
         include: {
-          user: true,
           bot: true,
         },
       }),
-      prisma.geminiApiKey.findFirst({ where: { status: 'ACTIVE' } }),
+      prisma.geminiApiKey.findFirst({
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+      }),
     ]);
 
     totalBots = bCount;
     activeBots = abCount;
-    totalUsers = uCount;
+    requestsToday = todayCount;
+    requestsMonth = monthCount;
     recentLogs = logs;
-    if (activeApiKey?.latencyMs) apiLatency = activeApiKey.latencyMs;
+    initialKeyRecord = keyRecord;
   } catch (err) {
     console.error('Dashboard data fetch error:', err);
   }
 
   return (
     <>
-      <Header title="Реестр улик" />
-      <main className="pt-[88px] px-container-padding pb-10 min-h-screen">
-        <DashboardClient
-          totalBots={totalBots}
-          activeBots={activeBots}
-          totalUsers={totalUsers}
-          recentLogs={recentLogs}
-          apiLatency={apiLatency}
-        />
+      <Header title="Обзор" />
+      <main className="pt-20 px-8 pb-12 min-h-screen bg-background">
+        <div className="max-w-7xl mx-auto space-y-8">
+          <DashboardClient
+            totalBots={totalBots}
+            activeBots={activeBots}
+            requestsToday={requestsToday}
+            requestsMonth={requestsMonth}
+            recentLogs={recentLogs}
+            initialKeyRecord={
+              initialKeyRecord
+                ? {
+                    name: initialKeyRecord.name,
+                    provider: initialKeyRecord.provider,
+                    status: initialKeyRecord.status,
+                    latencyMs: initialKeyRecord.latencyMs,
+                  }
+                : null
+            }
+          />
+        </div>
       </main>
     </>
   );

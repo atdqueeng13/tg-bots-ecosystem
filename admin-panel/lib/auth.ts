@@ -8,7 +8,7 @@ const JWT_SECRET = new TextEncoder().encode(
 
 const COOKIE_NAME = 'sherlock_admin_token';
 
-export async function createSession(email: string, name: string = 'Главный следователь') {
+export async function createSession(email: string, name: string = 'Администратор') {
   const token = await new SignJWT({ email, name, role: 'admin' })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()

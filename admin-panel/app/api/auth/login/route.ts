@@ -14,12 +14,12 @@ export async function POST(req: NextRequest) {
 
     if (!inputLogin || !inputPass) {
       return NextResponse.json(
-        { error: 'Укажите идентификатор оперативника и код доступа.' },
+        { error: 'Укажите логин и пароль администратора.' },
         { status: 400 }
       );
     }
 
-    // 1. Поиск администратора в базе данных (включая созданных с Допуском Ур. 4)
+    // 1. Поиск администратора в базе данных
     let authenticatedUser: { login: string; name: string; clearanceLevel: number } | null = null;
 
     try {
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
       console.error('DB admin check fallback to ENV:', e);
     }
 
-    // 2. Резервная проверка через переменные окружения Vercel
+    // 2. Резервная проверка через переменные окружения
     if (!authenticatedUser) {
       const mainAdminLogin = (process.env.ADMIN_EMAIL || 'lasleywork').toLowerCase();
       const mainAdminPass = process.env.ADMIN_PASSWORD || 'Danyap0l4ndbot615!';
@@ -47,15 +47,15 @@ export async function POST(req: NextRequest) {
       const partnerPass = process.env.SAINTROSE_PASSWORD || 'roserose123';
 
       if (inputLogin === mainAdminLogin && inputPass === mainAdminPass) {
-        authenticatedUser = { login: mainAdminLogin, name: 'Главный следователь (Lasley)', clearanceLevel: 4 };
+        authenticatedUser = { login: mainAdminLogin, name: 'Главный администратор (Lasley)', clearanceLevel: 4 };
       } else if (inputLogin === partnerLogin && inputPass === partnerPass) {
-        authenticatedUser = { login: partnerLogin, name: 'Следователь (SaintRose)', clearanceLevel: 4 };
+        authenticatedUser = { login: partnerLogin, name: 'Администратор (SaintRose)', clearanceLevel: 4 };
       }
     }
 
     if (!authenticatedUser) {
       return NextResponse.json(
-        { error: 'Неверный идентификатор оперативника или код доступа.' },
+        { error: 'Неверный логин или пароль администратора.' },
         { status: 401 }
       );
     }
@@ -72,9 +72,15 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Detect if request is over HTTPS or localhost
+    const host = req.headers.get('host') || '';
+    const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1');
+    const isHttps = req.headers.get('x-forwarded-proto') === 'https';
+    const isSecure = isHttps || (!isLocalhost && process.env.NODE_ENV === 'production');
+
     response.cookies.set('sherlock_admin_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 24 * 7, // 7 days

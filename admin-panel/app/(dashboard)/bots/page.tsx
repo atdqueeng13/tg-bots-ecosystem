@@ -22,7 +22,7 @@ export default async function BotsPage() {
 
   return (
     <>
-      <Header title="Реестр Улик" badge="АКТИВЫ" />
+      <Header title="Боты" />
       <main className="pt-20 px-container-padding pb-10 min-h-screen">
         <BotsClient initialBots={bots} groups={groups} />
       </main>

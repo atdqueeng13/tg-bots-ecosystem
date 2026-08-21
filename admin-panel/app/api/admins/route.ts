@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     const newAdmin = await prisma.admin.create({
       data: {
         email: cleanEmail,
-        name: name?.trim() || 'Оперативник Допуска Ур. 4',
+        name: name?.trim() || 'Администратор',
         passwordHash: password.trim(),
         clearanceLevel: Number(clearanceLevel) || 4,
         role: 'ADMIN',

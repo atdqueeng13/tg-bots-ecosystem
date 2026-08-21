@@ -3,16 +3,17 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Admin {
   id             String   @id @default(uuid())
   email          String   @unique
-  name           String   @default("Главный следователь")
+  name           String   @default("Главный администратор")
   passwordHash   String
-  clearanceLevel Int      @default(4) // Уровень допуска 4 (Полный доступ)
+  clearanceLevel Int      @default(4) // 4 = Superadmin, 3 = Admin, 2 = Moderator
   role           String   @default("ADMIN")
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -21,53 +22,64 @@ model Admin {
 model Bot {
   id               String            @id @default(uuid())
   botId            String            @unique // e.g. "BR-8921", "bot_01"
-  name             String // e.g. "Oracle-7", "Orion-X"
+  name             String // e.g. "Марк Уитфилд", "Дворецкий Джеймс"
+  username         String?           @default("")
   token            String // Telegram bot token
   avatarUrl        String?
-  role             String            @default("Главный персонаж")
+  role             String            @default("Подозреваемый")
   status           String            @default("ACTIVE") // ACTIVE, OFFLINE, ERROR
   isActive         Boolean           @default(true)
+  isMainHub        Boolean           @default(false) // True для Главного бота-хаба / Лаунчера
+  onboardingSteps  String?           @default("[]") // JSON массив шагов воронки [{id, text, delaySeconds, mediaUrl, buttonText}]
+  isGuilty         Boolean           @default(false) // True если бот - настоящий убийца в Деле
+  secretAlibi      String?           // Секрет при расколе (у невиновных - правда, у убийцы - нескладная ложь)
   lastPing         DateTime?
-  groupId          String?
+  groupId          String?           // Case ID
   group            Group?            @relation(fields: [groupId], references: [id])
-  model            String            @default("gemini-2.0-flash")
+  model            String            @default("gemini-3.6-flash")
   temperature      Float             @default(0.7)
   reasoningEnabled Boolean           @default(false)
-  legend           String? // Публичная легенда
-  knowledge        String? // База знаний
-  secrets          String? // Секретные данные
-  character        String? // Характер / особенности речи
-  triggers         String? // Поведенческие триггеры
+  prompt           String?           // Сплошной системный промпт бота
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   dialogues        UserDialogueLog[]
 }
 
 model Group {
-  id        String   @id @default(uuid())
-  code      String   @unique // e.g. "742-ALPHA", "089-OMEGA"
-  title     String // e.g. "Смерть на приёме", "Операция: Сумерки"
-  status    String   @default("ACTIVE") // ACTIVE, ARCHIVED
-  reward    String?  @default("$4,500")
-  lore      String // Краткий контекст / общий лор
-  coverUrl  String?
-  bots      Bot[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String   @id @default(uuid())
+  code          String   @unique // e.g. "case_blackwood"
+  title         String // e.g. "Дело №1: Тайна особняка Блэквуд"
+  status        String   @default("ACTIVE") // ACTIVE, ARCHIVED
+  lore          String   @default("") // Описание / обстоятельства преступления
+  prompt        String?  @default("") // Групповой системный контекст / лор дела
+  solutionTruth String?  @default("") // Закрытая истина дела: кто убийца, мотив, как произошло
+  isGuiltyBotId String?  // ID бота-убийцы
+  starsPrice    Int      @default(50) // Стоимость дела в Telegram Stars (0 = бесплатно)
+  coverUrl      String?
+  bots          Bot[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model TelegramUser {
-  id            String            @id @default(uuid())
-  telegramId    String            @unique
-  username      String?
-  firstName     String?
-  lastName      String?
-  status        String            @default("ACTIVE") // ACTIVE, INACTIVE, BLOCKED
+  id              String            @id @default(uuid())
+  telegramId      String            @unique
+  username        String?
+  firstName       String?
+  lastName        String?
+  status          String            @default("ACTIVE") // ACTIVE, INACTIVE, BLOCKED
+  stage           String            @default("ONBOARDING") // ONBOARDING, INVESTIGATING, ACCUSING, SOLVED, FAILED
+  stageStatus     String            @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, FAILED
+  funnelStep      Int               @default(0) // Текущий шаг в воронке онбординга
+  funnelCompleted Boolean           @default(false) // Завершена ли воронка
+  activeCaseId    String?           // ID текущего расследуемого дела
+  caseProgress  String?           @default("{}") // JSON с прогрессом допросов и шкалой давления
+  currentBotId  String?           // Последний активный бот
   firstSeen     DateTime          @default(now())
   lastActive    DateTime          @default(now())
   dialogueCount Int               @default(0)
   tokensUsed    Int               @default(0)
-  casesAccessed String?           @default("[]") // JSON string of case codes
+  casesAccessed String?           @default("[]")
   spentAmount   Float             @default(0.0)
   dialogues     UserDialogueLog[]
 }
@@ -87,15 +99,18 @@ model UserDialogueLog {
 }
 
 model GeminiApiKey {
-  id           String    @id @default(uuid())
-  name         String    @default("Gemini Key")
-  key          String // Secret API Key
-  status       String    @default("ACTIVE") // ACTIVE, EXHAUSTED, COOLDOWN, ERROR
-  latencyMs    Int       @default(120)
-  requestCount Int       @default(0)
-  lastUsedAt   DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id              String    @id @default(uuid())
+  name            String    @default("Gemini Key")
+  key             String // Secret API Key
+  provider        String    @default("gemini") // gemini, openai, anthropic, openrouter, custom
+  status          String    @default("ACTIVE") // ACTIVE, EXHAUSTED, COOLDOWN, ERROR
+  isPrimary       Boolean   @default(false)
+  latencyMs       Int       @default(120)
+  requestCount    Int       @default(0)
+  supportedModels String?   @default("[]") // JSON list of available models
+  lastUsedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model Broadcast {
@@ -103,8 +118,9 @@ model Broadcast {
   code        String    @unique // e.g. "BC-8892"
   message     String
   mediaUrl    String?
-  audience    String    @default("ALL") // ALL, CASE:742-ALPHA, INACTIVE
-  status      String    @default("DELIVERED") // SCHEDULED, DELIVERED, ERROR
+  botId       String?   // Опциональный бот для рассылки
+  audience    String    @default("ALL") // ALL, INACTIVE
+  status      String    @default("DELIVERED") // SCHEDULED, DELIVERED, IN_PROGRESS, ERROR
   sentCount   Int       @default(0)
   totalTarget Int       @default(0)
   scheduledAt DateTime?
@@ -112,9 +128,12 @@ model Broadcast {
 }
 
 model GlobalSetting {
-  id            String   @id @default("global")
-  systemPrompt  String
-  primaryEngine String   @default("gemini-2.0-flash")
-  autoFallback  Boolean  @default(true)
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default("global")
+  systemPrompt   String
+  primaryEngine  String   @default("gemini-2.0-flash")
+  apiKeyMode     String   @default("AUTO_ROTATION") // AUTO_ROTATION, FIXED
+  activeApiKeyId String?
+  fallbackBotId  String?  // ID резервного бота при сбое
+  autoFallback   Boolean  @default(true)
+  updatedAt      DateTime @updatedAt
 }

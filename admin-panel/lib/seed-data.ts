@@ -4,304 +4,198 @@ let initialized = false;
 
 export async function ensureInitialData() {
   if (initialized) return;
+  initialized = true;
 
   try {
-    // 0. Auto-create tables in SQLite (/tmp/dev.db) if running on serverless
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "Admin" (
-        "id" TEXT NOT NULL PRIMARY KEY,
-        "email" TEXT NOT NULL,
-        "name" TEXT NOT NULL DEFAULT 'Главный следователь',
-        "passwordHash" TEXT NOT NULL DEFAULT '',
-        "clearanceLevel" INTEGER NOT NULL DEFAULT 4,
-        "role" TEXT NOT NULL DEFAULT 'ADMIN',
-        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Admin_email_key" ON "Admin"("email");`);
-
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "Group" (
-        "id" TEXT NOT NULL PRIMARY KEY,
-        "code" TEXT NOT NULL,
-        "title" TEXT NOT NULL,
-        "status" TEXT NOT NULL DEFAULT 'ACTIVE',
-        "reward" TEXT DEFAULT '$4,500',
-        "lore" TEXT NOT NULL,
-        "coverUrl" TEXT,
-        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Group_code_key" ON "Group"("code");`);
-
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "Bot" (
-        "id" TEXT NOT NULL PRIMARY KEY,
-        "botId" TEXT NOT NULL,
-        "name" TEXT NOT NULL,
-        "token" TEXT NOT NULL,
-        "avatarUrl" TEXT,
-        "role" TEXT NOT NULL DEFAULT 'Главный персонаж',
-        "status" TEXT NOT NULL DEFAULT 'ACTIVE',
-        "isActive" BOOLEAN NOT NULL DEFAULT true,
-        "lastPing" DATETIME,
-        "groupId" TEXT,
-        "model" TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
-        "temperature" REAL NOT NULL DEFAULT 0.7,
-        "reasoningEnabled" BOOLEAN NOT NULL DEFAULT false,
-        "legend" TEXT,
-        "knowledge" TEXT,
-        "secrets" TEXT,
-        "character" TEXT,
-        "triggers" TEXT,
-        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Bot_botId_key" ON "Bot"("botId");`);
-
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "TelegramUser" (
-        "id" TEXT NOT NULL PRIMARY KEY,
-        "telegramId" TEXT NOT NULL,
-        "username" TEXT,
-        "firstName" TEXT,
-        "lastName" TEXT,
-        "status" TEXT NOT NULL DEFAULT 'ACTIVE',
-        "firstSeen" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "lastActive" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "dialogueCount" INTEGER NOT NULL DEFAULT 0,
-        "tokensUsed" INTEGER NOT NULL DEFAULT 0,
-        "casesAccessed" TEXT DEFAULT '[]',
-        "spentAmount" REAL NOT NULL DEFAULT 0.0
-      );
-    `);
-    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "TelegramUser_telegramId_key" ON "TelegramUser"("telegramId");`);
-
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "UserDialogueLog" (
-        "id" TEXT NOT NULL PRIMARY KEY,
-        "userId" TEXT NOT NULL,
-        "botId" TEXT NOT NULL,
-        "userMessage" TEXT NOT NULL,
-        "botResponse" TEXT NOT NULL,
-        "modelUsed" TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
-        "tokens" INTEGER NOT NULL DEFAULT 0,
-        "status" TEXT NOT NULL DEFAULT 'SUCCESS',
-        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "GeminiApiKey" (
-        "id" TEXT NOT NULL PRIMARY KEY,
-        "name" TEXT NOT NULL DEFAULT 'Gemini Key',
-        "key" TEXT NOT NULL,
-        "status" TEXT NOT NULL DEFAULT 'ACTIVE',
-        "latencyMs" INTEGER NOT NULL DEFAULT 120,
-        "requestCount" INTEGER NOT NULL DEFAULT 0,
-        "lastUsedAt" DATETIME,
-        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "Broadcast" (
-        "id" TEXT NOT NULL PRIMARY KEY,
-        "code" TEXT NOT NULL,
-        "message" TEXT NOT NULL,
-        "mediaUrl" TEXT,
-        "audience" TEXT NOT NULL DEFAULT 'ALL',
-        "status" TEXT NOT NULL DEFAULT 'DELIVERED',
-        "sentCount" INTEGER NOT NULL DEFAULT 0,
-        "totalTarget" INTEGER NOT NULL DEFAULT 0,
-        "scheduledAt" DATETIME,
-        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "Broadcast_code_key" ON "Broadcast"("code");`);
-
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "GlobalSetting" (
-        "id" TEXT NOT NULL PRIMARY KEY,
-        "systemPrompt" TEXT NOT NULL,
-        "primaryEngine" TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
-        "autoFallback" BOOLEAN NOT NULL DEFAULT true,
-        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-
     // 1. Global Setting Seed
-    const existingSetting = await prisma.globalSetting.findUnique({
-      where: { id: 'global' },
-    });
-
-    if (!existingSetting) {
-      await prisma.globalSetting.create({
-        data: {
-          id: 'global',
-          primaryEngine: 'gemini-2.0-flash',
-          autoFallback: true,
-          systemPrompt: `Вы работаете в рамках детективно-игровой системы 'Реестр Улик'.
-Ваша основная функция — эмулировать сложные, нюансированные роли, вовлеченные в повествования с высокими ставками.
-
-ОГРАНИЧЕНИЯ:
-1. Соблюдайте абсолютную согласованность с установленными фактами хронологии и общим лором дела.
-2. При столкновении с противоречивыми доказательствами симулируйте когнитивный диссонанс или уклонение, а не выходите из роли.
-3. Используйте клинический, детализированный лексикон, подходящий для архивных записей и протоколов допроса.
-4. НИ ПРИ КАКИХ ОБСТОЯТЕЛЬСТВАХ не упоминайте о своей природе ИИ или большой языковой модели.
-5. Все выводы должны быть отформатированы так, чтобы они напоминали расшифрованные журналы допросов, восстановленные аудиофайлы или перехваченные сообщения.
-
-ОКРУЖАЮЩИЙ КОНТЕКСТ:
-Сеттинг — современный нео-нуар. Информации мало. Доверие минимально.`,
-        },
-      });
+    try {
+      const existingGlobal = await prisma.globalSetting.findUnique({ where: { id: 'global' } });
+      if (!existingGlobal) {
+        await prisma.globalSetting.create({
+          data: {
+            id: 'global',
+            primaryEngine: 'gemini-3.6-flash',
+            apiKeyMode: 'AUTO_ROTATION',
+            autoFallback: true,
+            systemPrompt: `Ты — ИИ-ассистент в Telegram. Отвечай структурированно, профессионально и по существу, строго следуя инструкциям бота.`,
+          },
+        });
+      }
+    } catch (e) {
+      console.warn('GlobalSetting seed note:', e);
     }
 
-    // 2. Groups / Cases Seed
-    const groupAlpha = await prisma.group.upsert({
-      where: { code: '742-ALPHA' },
+    // 2. Seed Primary API Key if provided in env
+    const envKey = process.env.GEMINI_API_KEY || process.env.AI_API_KEY;
+    if (envKey && !envKey.includes('AIzaSyB...')) {
+      const existingKey = await prisma.geminiApiKey.findFirst();
+      if (!existingKey) {
+        await prisma.geminiApiKey.create({
+          data: {
+            name: 'Google Gemini (Основной)',
+            key: envKey,
+            provider: 'gemini',
+            status: 'ACTIVE',
+            isPrimary: true,
+            latencyMs: 110,
+          },
+        });
+      }
+    }
+
+    // 3. Seed Admins
+    try {
+      await prisma.admin.upsert({
+        where: { email: (process.env.ADMIN_EMAIL || 'lasleywork').toLowerCase() },
+        update: {},
+        create: {
+          email: (process.env.ADMIN_EMAIL || 'lasleywork').toLowerCase(),
+          name: 'Главный администратор (Lasley)',
+          passwordHash: process.env.ADMIN_PASSWORD || 'Danyap0l4ndbot615!',
+          clearanceLevel: 4,
+          role: 'SUPERADMIN',
+        },
+      });
+    } catch (e) {
+      console.warn('Admin seed note:', e);
+    }
+
+    // 4. Seed Default Detective Case: Case #1 Blackwood
+    const defaultCase = await prisma.group.upsert({
+      where: { code: 'case_blackwood' },
       update: {},
       create: {
-        code: '742-ALPHA',
-        title: 'Смерть на приёме',
+        code: 'case_blackwood',
+        title: 'Дело №1: Тайна особняка Блэквуд',
         status: 'ACTIVE',
-        reward: '$4,500',
-        coverUrl: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop',
-        lore: 'Высокопоставленный дипломат был найден мертвым во время эксклюзивного приема в Гранд-посольстве. Первоначальные отчеты указывают на отравление. В настоящее время всем гостям запрещено покидать территорию.',
+        starsPrice: 0, // Бесплатный демо-кейс
+        lore: `Лорд Артур Блэквуд был найден мертвым в своем запертом кабинете ровно в 23:30. На дубовом столе стоял недопитый бокал выдержанного бренди. Судмедэкспертиза показала наличие редкого растительного яда кураре. В этот вечер в особняке находились 5 человек: племянник-наследник, молодая вдова, дворецкий, личный врач и садовник. Все они сейчас сидят в коридоре перед кабинетом следователя.`,
+        prompt: `Все события происходят в викторианском особняке Блэквуд. Время смерти: между 22:45 и 23:15. Убийство совершено через отравленный бренди.`,
+        solutionTruth: `Настоящий убийца — Дворецкий Джеймс Спенсер. Мотив: Лорд Блэквуд в этот вечер обнаружил крупную недостачу и подделку подписей на чеках и пообещал вызвать полицию утром. Джеймс проник в кабинет в 22:45 и подмешал каплю кураре в любимый графин бренди. При жестком давлении Джеймс начинает нервничать, путает время и выдает нелепое алиби: будто он в 22:45 случайно забрел в крыло лорда, потому что искал в темноте оброненные карманные часы.`,
       },
     });
 
-    const groupBeta = await prisma.group.upsert({
-      where: { code: '089-OMEGA' },
-      update: {},
-      create: {
-        code: '089-OMEGA',
-        title: 'Операция: Сумерки',
-        status: 'ACTIVE',
-        reward: '$12,000',
-        coverUrl: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=800&auto=format&fit=crop',
-        lore: 'Утечка закрытых протоколов кибер-безопасности корпорации OmniCorp. В сети обнаружены следы автономного агента, выкачивающего засекреченные архивы.',
-      },
-    });
-
-    // 3. Bots Seed
-    await prisma.bot.upsert({
-      where: { botId: 'BR-8921' },
-      update: {},
-      create: {
+    // 5. Seed Suspects for Case #1
+    const suspectsSeed = [
+      {
         botId: 'BR-8921',
-        name: 'Orion-X',
-        token: '7123456789:AAFakeTokenOrionX_Example1',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop',
-        role: 'Главный антагонист / Информатор',
-        status: 'ACTIVE',
-        isActive: true,
-        groupId: groupAlpha.id,
-        model: 'gemini-2.0-flash',
-        temperature: 0.7,
-        reasoningEnabled: true,
-        legend: 'Известен как высокоуровневый корпоративный посредник и фиксер, действующий в секторе Нео-Берлин. Имеет репутацию безжалостной эффективности и абсолютной скрытности.',
-        knowledge: 'Обширные знания о тактике корпоративного шпионажа, ценах на черном рынке киберимплантов и внутренней структуре OmniCorp. Не знает точное местоположение базы повстанцев.',
-        secrets: 'На самом деле является двойным агентом, работающим на Сопротивление. Раскрывает это только при предъявлении кодовой фразы "Crimson Dawn".',
-        character: 'Говорит короткими, четкими фразами. Корпоративный жаргон использует умеренно. Никогда не выказывает сомнений. Тон холодный, аналитический, слегка циничный.',
-        triggers: 'ЕСЛИ пользователь упоминает "Проект Икар" -> немедленно прекратить беседу и записать тревогу. ЕСЛИ предлагает кредиты -> вежливо отклонить, но зафиксировать попытку подкупа.',
+        name: 'Марк Уитфилд',
+        role: 'Племянник и наследник',
+        groupId: defaultCase.id,
+        isGuilty: false,
+        token: process.env.BOT_01_TOKEN || '1234567890:DEMO_TOKEN_BOT1',
+        prompt: `Ты — Марк Уитфилд, 28 лет, племянник убитого. Ты модно одет, но выглядишь нервным и уставшим. Дядя отказался покрыть твои карточные долги. С 22:30 до 23:15 ты был в бильярдной, но никто не может это подтвердить.`,
+        secretAlibi: `Да, я соврал, что был в бильярдной! На самом деле в 22:40 я тайком проник в библиотеку и украл из сейфа дяди долговые расписки, чтобы спастись от ростовщиков. Но когда я уходил, дядя был жив и читал газету!`,
       },
-    });
-
-    await prisma.bot.upsert({
-      where: { botId: 'BR-4432' },
-      update: {},
-      create: {
+      {
         botId: 'BR-4432',
-        name: 'Oracle-7',
-        token: '7123456789:AAFakeTokenOracle7_Example2',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop',
-        role: 'Архивариус / Криминалист',
-        status: 'ACTIVE',
-        isActive: true,
-        groupId: groupBeta.id,
-        model: 'gemini-2.0-flash',
-        temperature: 0.4,
-        reasoningEnabled: false,
-        legend: 'Старший аналитик судебно-медицинской экспертизы.',
-        knowledge: 'Доступ к базе отпечатков пальцев, токсикологическим экспертизам.',
-        character: 'Говорит вежливо, методично, оперирует фактами и временными метками.',
+        name: 'Виктория Блэквуд',
+        role: 'Молодая вдова',
+        groupId: defaultCase.id,
+        isGuilty: false,
+        token: process.env.BOT_02_TOKEN || '1234567890:DEMO_TOKEN_BOT2',
+        prompt: `Ты — леди Виктория, 26 лет. Холодная, элегантная, держишься с достоинством, но скрываешь тайный роман. Ты утверждаешь, что весь вечер была в спальне с мигренью.`,
+        secretAlibi: `Хорошо, следователь, я скажу правду! С 22:30 до 23:00 я была в оранжерее на тайном свидании с доктором Мортимером. Мы любим друг друга. Артур собирался подать на развод и лишить меня содержания. Но мы не убивали его!`,
       },
-    });
-
-    // 4. Sample Users Seed
-    const user1 = await prisma.telegramUser.upsert({
-      where: { telegramId: '98402911' },
-      update: {},
-      create: {
-        telegramId: '98402911',
-        username: 'john_doe_99',
-        firstName: 'Джонатан',
-        lastName: 'Доу',
-        status: 'ACTIVE',
-        dialogueCount: 42,
-        tokensUsed: 14200,
-        spentAmount: 45.0,
-        casesAccessed: JSON.stringify(['742-ALPHA', '089-OMEGA']),
+      {
+        botId: 'BR-9901',
+        name: 'Джеймс Спенсер',
+        role: 'Дворецкий (УБИЙЦА)',
+        groupId: defaultCase.id,
+        isGuilty: true,
+        token: process.env.BOT_03_TOKEN || '1234567890:DEMO_TOKEN_BOT3',
+        prompt: `Ты — Джеймс Спенсер, 52 года, дворецкий особняка. Безупречные манеры, спокойный тон, идеальная выдержка. Ты утверждаешь, что весь вечер был в буфетной и начищал фамильное серебро. На самом деле ТЫ УБИЛ ЛОРДА.`,
+        secretAlibi: `[Паникует, сбивается с дыхания]: Я... я был возле кабинета лорда в 22:45, да! Но только потому, что уронил там свои золотые часы и искал их на ковре в темноте! Я ничего не трогал и не подсыпал!`,
       },
-    });
-
-    await prisma.telegramUser.upsert({
-      where: { telegramId: '11930422' },
-      update: {},
-      create: {
-        telegramId: '11930422',
-        username: 'cipher_x',
-        firstName: 'Алиса',
-        lastName: 'Смит',
-        status: 'ACTIVE',
-        dialogueCount: 19,
-        tokensUsed: 6800,
-        spentAmount: 15.0,
-        casesAccessed: JSON.stringify(['742-ALPHA']),
+      {
+        botId: 'BR-1004',
+        name: 'Доктор Мортимер',
+        role: 'Семейный врач',
+        groupId: defaultCase.id,
+        isGuilty: false,
+        token: process.env.BOT_04_TOKEN || '1234567890:DEMO_TOKEN_BOT4',
+        prompt: `Ты — доктор Джон Мортимер, 45 лет. Интеллигентный, но дергается при упоминании лекарств и ядов. В твоей аптечке действительно был кураре для медицинских опытов.`,
+        secretAlibi: `Я признаюсь! Неделю назад я заметил, что склянка с кураре пропала из моего саквояжа в буфетной. Я побоялся сказать Артуру, думая, что сам потерял её. А в 22:30 я был в оранжерее с Викторией!`,
       },
-    });
+      {
+        botId: 'BR-1005',
+        name: 'Томас Рид',
+        role: 'Садовник',
+        groupId: defaultCase.id,
+        isGuilty: false,
+        token: process.env.BOT_05_TOKEN || '1234567890:DEMO_TOKEN_BOT5',
+        prompt: `Ты — Томас Рид, 60 лет, угрюмый садовник. Говоришь простыми короткими фразами, куришь трубку. В 23:00 ты запирал теплицу и видел силуэты через окна особняка.`,
+        secretAlibi: `Я видел, как в 22:45 в кабинет лорда заходил человек в черном фраке слуги и нес поднос. А через пять минут он выбежал оттуда и оглядывался по сторонам. Это был точно дворецкий Джеймс!`,
+      },
+    ];
 
-    // 5. Sample API Key Seed
-    const existingKey = await prisma.geminiApiKey.findFirst();
-    if (!existingKey) {
-      await prisma.geminiApiKey.create({
-        data: {
-          name: 'Gemini Primary (Default)',
-          key: process.env.GEMINI_API_KEY || 'AIzaSyDemoKey-SetYourOwnInSettings',
-          status: 'ACTIVE',
-          latencyMs: 135,
-          requestCount: 12,
+    for (const s of suspectsSeed) {
+      await prisma.bot.upsert({
+        where: { botId: s.botId },
+        update: {
+          groupId: s.groupId,
+          isGuilty: s.isGuilty,
+          secretAlibi: s.secretAlibi,
+        },
+        create: {
+          botId: s.botId,
+          name: s.name,
+          role: s.role,
+          groupId: s.groupId,
+          token: s.token,
+          isGuilty: s.isGuilty,
+          secretAlibi: s.secretAlibi,
+          prompt: s.prompt,
+          model: 'gemini-2.0-flash',
         },
       });
     }
 
-    // 6. Seed Admins (Level 4 Clearance)
-    await prisma.admin.upsert({
-      where: { email: (process.env.ADMIN_EMAIL || 'lasleywork').toLowerCase() },
-      update: {},
-      create: {
-        email: (process.env.ADMIN_EMAIL || 'lasleywork').toLowerCase(),
-        name: 'Главный следователь (Lasley)',
-        passwordHash: process.env.ADMIN_PASSWORD || 'Danyap0l4ndbot615!',
-        clearanceLevel: 4,
-        role: 'SUPERADMIN',
+    // 6. Seed Main Hub Bot (Fixed single Game Master with Onboarding Funnel)
+    const defaultFunnelSteps = [
+      {
+        id: 'step_1',
+        stepIndex: 0,
+        text: `🕵️‍♂️ *Добро пожаловать в Детективное Бюро Скотланд-Ярда!*\n\nВы приняты на службу в качестве младшего инспектора. Здесь расследуются самые загадочные и громкие преступления Лондона.`,
+        delaySeconds: 0,
+        mediaUrl: '',
+        buttonText: 'Получить инструкции 📜',
       },
-    });
+      {
+        id: 'step_2',
+        stepIndex: 1,
+        text: `📋 *Как проходит расследование:*\n\n1️⃣ Вы выбираете доступное Дело из архива.\n2️⃣ Получаете досье и доступ к личным контактам всех подозреваемых.\n3️⃣ Допрашиваете каждого персонажа по очереди. Помните: невиновные скрывают свои тайны, а убийца — паникует и выдумывает нелепую ложь!`,
+        delaySeconds: 2,
+        mediaUrl: '',
+        buttonText: 'Понятно, что дальше? 🔍',
+      },
+      {
+        id: 'step_3',
+        stepIndex: 2,
+        text: `⚖️ *Вынесение вердикта:*\n\nКогда у вас сложится картина преступления, используйте команду */accuse* в этом боте, укажите имя преступника и мотив. Суд оценит вашу логику по 10-балльной шкале!\n\nИспользуйте команду */cases*, чтобы в любой момент открыть список расследований.`,
+        delaySeconds: 2,
+        mediaUrl: '',
+        buttonText: '📂 Открыть архив Дел',
+      },
+    ];
 
-    await prisma.admin.upsert({
-      where: { email: (process.env.SAINTROSE_EMAIL || 'saintrose').toLowerCase() },
-      update: {},
+    await prisma.bot.upsert({
+      where: { botId: 'hub_main' },
+      update: {
+        isMainHub: true,
+      },
       create: {
-        email: (process.env.SAINTROSE_EMAIL || 'saintrose').toLowerCase(),
-        name: 'Следователь (SaintRose)',
-        passwordHash: process.env.SAINTROSE_PASSWORD || 'roserose123',
-        clearanceLevel: 4,
-        role: 'ADMIN',
+        botId: 'hub_main',
+        name: 'Детективное Бюро (Главный Хаб)',
+        role: 'Шеф Бюро / Архивариус',
+        token: process.env.MAIN_BOT_TOKEN || '1234567890:DEMO_HUB_TOKEN',
+        isMainHub: true,
+        model: 'gemini-3.6-flash',
+        onboardingSteps: JSON.stringify(defaultFunnelSteps),
+        prompt: `Ты — Шеф Детективного Бюро Скотланд-Ярда и Главный Архивариус.
+Твоя задача — помогать сыщикам, напоминать об их открытых делах, презентовать новые расследования дня и оценивать финальные обвинения (/accuse).
+Общайся солидно, сдержанно, по-детективному, в духе классических романов Артура Конан Дойла.
+Если сыщик спрашивает о доступных делах, подскажи ему команду /cases или кратко расскажи про "Дело №1: Тайна особняка Блэквуд".`,
       },
     });
 

@@ -1,39 +1,91 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+interface ApiKeyItem {
+  id: string;
+  name: string;
+  key: string;
+  provider?: string;
+  maskedKey: string;
+  status: string;
+  isPrimary: boolean;
+  latencyMs: number;
+  requestCount: number;
+  supportedModels: string[];
+  lastUsedAt?: string | null;
+}
 
 interface Props {
   initialSettings: any;
-  initialKeys: any[];
-  initialAdmins?: any[];
+  initialKeys: ApiKeyItem[];
+  bots: any[];
 }
 
-export function SettingsClient({ initialSettings, initialKeys, initialAdmins = [] }: Props) {
-  const [systemPrompt, setSystemPrompt] = useState(initialSettings?.systemPrompt || '');
-  const [primaryEngine, setPrimaryEngine] = useState(initialSettings?.primaryEngine || 'gemini-2.0-flash');
-  const [autoFallback, setAutoFallback] = useState(initialSettings?.autoFallback ?? true);
-  const [keys, setKeys] = useState(initialKeys);
-  const [admins, setAdmins] = useState(initialAdmins);
-  const [saving, setSaving] = useState(false);
+export function SettingsClient({ initialSettings, initialKeys, bots }: Props) {
+  const [systemPrompt, setSystemPrompt] = useState(
+    initialSettings?.systemPrompt ||
+      `Ты — ИИ-ассистент в Telegram. Отвечай структурированно, профессионально и по существу, строго следуя инструкциям бота.`
+  );
+  const [primaryEngine, setPrimaryEngine] = useState(
+    initialSettings?.primaryEngine || 'gemini-3.6-flash'
+  );
+  const [apiKeyMode, setApiKeyMode] = useState<'AUTO_ROTATION' | 'FIXED'>(
+    initialSettings?.apiKeyMode === 'FIXED' ? 'FIXED' : 'AUTO_ROTATION'
+  );
+  const [activeApiKeyId, setActiveApiKeyId] = useState(
+    initialSettings?.activeApiKeyId || (initialKeys.find((k) => k.isPrimary)?.id || '')
+  );
+  const [fallbackBotId, setFallbackBotId] = useState(
+    initialSettings?.fallbackBotId || (bots[0]?.id || '')
+  );
+  const [autoFallback, setAutoFallback] = useState(
+    initialSettings?.autoFallback !== undefined ? initialSettings.autoFallback : true
+  );
 
-  // Key Modal State
+  const [keys, setKeys] = useState<ApiKeyItem[]>(initialKeys);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [testingKeyId, setTestingKeyId] = useState<string | null>(null);
+
+  // Add Key Modal
   const [isAddKeyModalOpen, setIsAddKeyModalOpen] = useState(false);
-  const [keyName, setKeyName] = useState('');
-  const [newKey, setNewKey] = useState('');
+  const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyValue, setNewKeyValue] = useState('');
+  const [newKeyDefaultModel, setNewKeyDefaultModel] = useState('gemini-3.6-flash');
   const [addingKey, setAddingKey] = useState(false);
 
-  // Admin Modal State
-  const [isAddAdminModalOpen, setIsAddAdminModalOpen] = useState(false);
-  const [adminEmail, setAdminEmail] = useState('');
-  const [adminName, setAdminName] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [adminClearance, setAdminClearance] = useState('4');
-  const [addingAdmin, setAddingAdmin] = useState(false);
+  // Available models list
+  const [availableModels, setAvailableModels] = useState<string[]>([
+    'gemini-3.6-flash',
+    'gemini-3.5-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.7-flash',
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
+    'gemini-flash-latest',
+    'gpt-4o',
+    'claude-3-5-sonnet-20241022',
+  ]);
 
-  const tokenCount = Math.ceil(systemPrompt.length / 3.8);
+  useEffect(() => {
+    fetch('/api/ai/models')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.models && Array.isArray(data.models) && data.models.length > 0) {
+          setAvailableModels(data.models);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 4000);
+  };
 
   const handleSaveSettings = async () => {
-    setSaving(true);
+    setSavingSettings(true);
     try {
       const res = await fetch('/api/settings', {
         method: 'PUT',
@@ -41,22 +93,30 @@ export function SettingsClient({ initialSettings, initialKeys, initialAdmins = [
         body: JSON.stringify({
           systemPrompt,
           primaryEngine,
+          apiKeyMode,
+          activeApiKeyId: apiKeyMode === 'FIXED' ? activeApiKeyId : null,
+          fallbackBotId: fallbackBotId || null,
           autoFallback,
         }),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      alert('Глобальные параметры успешно применены ко всей экосистеме ботов!');
-    } catch (e: any) {
-      alert(e.message || 'Ошибка сохранения');
+
+      showToast('Настройки и основная модель успешно сохранены!');
+    } catch (err: any) {
+      alert(err.message || 'Ошибка сохранения настроек');
     } finally {
-      setSaving(false);
+      setSavingSettings(false);
     }
   };
 
   const handleAddKey = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newKey.trim()) return;
+    if (!newKeyValue.trim()) {
+      alert('Введите API ключ');
+      return;
+    }
 
     setAddingKey(true);
     try {
@@ -64,474 +124,632 @@ export function SettingsClient({ initialSettings, initialKeys, initialAdmins = [
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: keyName || 'Gemini Key',
-          key: newKey.trim(),
+          name: newKeyName.trim() || `API Ключ #${keys.length + 1}`,
+          key: newKeyValue.trim(),
         }),
       });
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      // Refresh keys
+      // If user selected a default model in modal, update primary engine
+      if (newKeyDefaultModel && newKeyDefaultModel !== primaryEngine) {
+        setPrimaryEngine(newKeyDefaultModel);
+        await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ primaryEngine: newKeyDefaultModel }),
+        });
+      }
+
+      // Re-fetch all keys
       const keysRes = await fetch('/api/gemini-keys');
       const keysData = await keysRes.json();
-      setKeys(keysData.keys || []);
+      if (keysData.keys) {
+        setKeys(keysData.keys);
+      }
+
       setIsAddKeyModalOpen(false);
-      setKeyName('');
-      setNewKey('');
-      alert('API ключ Gemini успешно добавлен в пул авто-ротации!');
-    } catch (e: any) {
-      alert(e.message || 'Ошибка добавления ключа');
+      setNewKeyName('');
+      setNewKeyValue('');
+      showToast('API ключ успешно добавлен и проверен!');
+    } catch (err: any) {
+      alert(err.message || 'Ошибка добавления API ключа');
     } finally {
       setAddingKey(false);
     }
   };
 
-  const handleDeleteKey = async (id: string) => {
-    if (!confirm('Удалить этот API ключ из пула ротации?')) return;
+  const handleSetPrimaryKey = async (keyId: string) => {
     try {
-      await fetch(`/api/gemini-keys?id=${id}`, { method: 'DELETE' });
-      setKeys(keys.filter((k) => k.id !== id));
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleAddAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!adminEmail.trim() || !adminPassword.trim()) {
-      alert('Логин и пароль обязательны');
-      return;
-    }
-
-    setAddingAdmin(true);
-    try {
-      const res = await fetch('/api/admins', {
-        method: 'POST',
+      const res = await fetch('/api/gemini-keys', {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: adminEmail.trim(),
-          name: adminName.trim() || 'Оперативник Допуска Ур. 4',
-          password: adminPassword.trim(),
-          clearanceLevel: Number(adminClearance) || 4,
-        }),
+        body: JSON.stringify({ id: keyId, setPrimary: true }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      // Refresh admins
-      const adminsRes = await fetch('/api/admins');
-      const adminsData = await adminsRes.json();
-      setAdmins(adminsData.admins || []);
-      setIsAddAdminModalOpen(false);
-      setAdminEmail('');
-      setAdminName('');
-      setAdminPassword('');
-      alert(`Учетная запись администратора Уровня ${adminClearance} успешно создана и сохранена в базу данных!`);
-    } catch (e: any) {
-      alert(e.message || 'Ошибка создания администратора');
-    } finally {
-      setAddingAdmin(false);
+      setKeys(
+        keys.map((k) => ({
+          ...k,
+          isPrimary: k.id === keyId,
+        }))
+      );
+      setActiveApiKeyId(keyId);
+      showToast('Активный API ключ обновлен!');
+    } catch (err: any) {
+      alert(err.message || 'Ошибка установки активного ключа');
     }
   };
 
-  const handleDeleteAdmin = async (id: string) => {
-    if (!confirm('Отозвать допуск и удалить этого администратора?')) return;
+  const handleTestKey = async (keyId: string) => {
+    setTestingKeyId(keyId);
     try {
-      await fetch(`/api/admins?id=${id}`, { method: 'DELETE' });
-      setAdmins(admins.filter((a) => a.id !== id));
-    } catch (e) {
-      console.error(e);
+      const res = await fetch('/api/gemini-keys', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: keyId, testKey: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+
+      if (data.key) {
+        setKeys(
+          keys.map((k) =>
+            k.id === keyId
+              ? {
+                  ...k,
+                  status: data.key.status,
+                  provider: data.key.provider || k.provider,
+                  latencyMs: data.key.latencyMs,
+                  supportedModels: data.models || k.supportedModels,
+                }
+              : k
+          )
+        );
+      }
+      showToast('API ключ проверен. Модели актуализированы!');
+    } catch (err: any) {
+      alert(err.message || 'Ошибка проверки ключа');
+    } finally {
+      setTestingKeyId(null);
     }
+  };
+
+  const handleDeleteKey = async (keyId: string, keyName: string) => {
+    if (keys.length <= 1) {
+      alert('Нельзя удалить единственный API ключ в системе');
+      return;
+    }
+
+    if (!confirm(`Удалить API ключ "${keyName}"?`)) return;
+
+    try {
+      const res = await fetch(`/api/gemini-keys?id=${keyId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Ошибка удаления');
+
+      setKeys(keys.filter((k) => k.id !== keyId));
+      showToast('API ключ удален.');
+    } catch (err: any) {
+      alert(err.message || 'Ошибка удаления');
+    }
+  };
+
+  const getProviderBadge = (provider?: string) => {
+    const p = (provider || 'gemini').toLowerCase();
+    if (p === 'openai') {
+      return (
+        <span className="bg-emerald-950/50 border border-emerald-500/40 text-emerald-300 text-[10px] font-mono px-1.5 py-0.5 rounded">
+          OpenAI
+        </span>
+      );
+    }
+    if (p === 'anthropic') {
+      return (
+        <span className="bg-purple-950/50 border border-purple-500/40 text-purple-300 text-[10px] font-mono px-1.5 py-0.5 rounded">
+          Claude
+        </span>
+      );
+    }
+    if (p === 'openrouter') {
+      return (
+        <span className="bg-blue-950/50 border border-blue-500/40 text-blue-300 text-[10px] font-mono px-1.5 py-0.5 rounded">
+          OpenRouter
+        </span>
+      );
+    }
+    return (
+      <span className="bg-amber-950/50 border border-amber-500/40 text-amber-300 text-[10px] font-mono px-1.5 py-0.5 rounded">
+        Gemini
+      </span>
+    );
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      {/* Page Header */}
-      <div className="flex justify-between items-end border-b border-outline-variant pb-4 mb-section-margin">
+    <>
+      {/* Toast Alert */}
+      {toastMessage && (
+        <div className="fixed top-20 right-8 z-50 bg-[#242424] border border-primary-container text-primary font-mono-code text-xs px-4 py-3 rounded shadow-2xl flex items-center gap-2 modal-animate">
+          <span className="material-symbols-outlined text-sm text-primary">check_circle</span>
+          {toastMessage}
+        </div>
+      )}
+
+      {/* Header */}
+      <header className="flex justify-between items-end">
         <div>
-          <h2 className="font-display-case text-display-case text-on-surface mb-2">
-            Глобальные параметры
+          <h2 className="font-display-lg text-display-lg text-on-background font-bold">
+            Настройки
           </h2>
-          <p className="font-body-md text-body-md text-on-surface-variant max-w-2xl text-xs leading-relaxed">
-            Настройте общесистемное поведение, управление администраторами уровня 4, основные протоколы интеграции ИИ и правила повествования.
+          <p className="text-on-surface-variant mt-1 font-body-base text-body-base">
+            Управление системным промптом, основной моделью ИИ по умолчанию и пулом API ключей.
           </p>
         </div>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={handleSaveSettings}
-            disabled={saving}
-            className="px-5 py-2.5 bg-primary-container text-on-primary-container border border-primary-container rounded font-label-caps text-label-caps hover:bg-inverse-primary hover:text-on-primary transition-colors flex items-center gap-2 uppercase tracking-widest text-xs font-bold shadow-lg"
-          >
-            <span className="material-symbols-outlined text-[16px]">save</span>
-            {saving ? 'Сохранение...' : 'Применить изменения'}
-          </button>
-        </div>
-      </div>
+        <button
+          type="button"
+          onClick={handleSaveSettings}
+          disabled={savingSettings}
+          className="bg-primary-container text-[#1a1a1a] font-bold px-6 py-2.5 rounded hover:opacity-90 transition-opacity flex items-center gap-2 text-sm active:scale-95 disabled:opacity-50 shadow-[0_0_15px_rgba(255,191,0,0.15)]"
+        >
+          <span className="material-symbols-outlined text-[18px]">save</span>
+          {savingSettings ? 'Сохранение...' : 'Сохранить все настройки'}
+        </button>
+      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: System Prompt & Admins (8 cols) */}
-        <div className="lg:col-span-8 space-y-6">
-          {/* System Prompt */}
-          <div className="bg-surface-container rounded-lg border border-outline-variant p-6 relative overflow-hidden group shadow-xl">
-            <div className="flex items-center gap-3 mb-4 pb-3 border-b border-dashed border-outline-variant">
-              <span className="material-symbols-outlined text-secondary">type_specimen</span>
-              <h3 className="font-title-md text-title-md text-on-surface font-bold">
-                Глобальный системный промпт
+      {/* Section 1: Default Primary Engine & Model Configuration */}
+      <section className="bg-[#242424] border border-[#333333] rounded-lg p-6 flex flex-col gap-4 shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#333333] pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded bg-surface-container flex items-center justify-center border border-[#333333]">
+              <span className="material-symbols-outlined text-primary text-[22px]">psychology</span>
+            </div>
+            <div>
+              <h3 className="font-title-sm text-base text-on-background font-semibold">
+                Основная модель ИИ по умолчанию
               </h3>
-              <span className="ml-auto font-label-caps text-[10px] bg-surface-container-lowest px-2 py-1 rounded text-secondary border border-outline-variant font-bold">
-                ПЕРЕОПРЕДЕЛЕНИЕ УР. 1
-              </span>
-            </div>
-            <p className="font-body-md text-on-surface-variant mb-4 text-xs leading-relaxed">
-              Эта директива предшествует всем индивидуальным промптам персонажей. Она определяет фундаментальную реальность, ограничения и рабочий тон для механизма генерации ИИ.
-            </p>
-            <div className="relative">
-              <textarea
-                value={systemPrompt}
-                onChange={(e) => setSystemPrompt(e.target.value)}
-                rows={10}
-                className="w-full bg-[#020617] text-tertiary font-data-mono text-xs p-4 border border-outline-variant rounded focus:border-secondary focus:ring-1 focus:ring-secondary transition-all resize-none shadow-inner leading-relaxed outline-none"
-                spellCheck={false}
-              />
-              <div className="absolute bottom-3 right-3 flex items-center gap-2">
-                <span className="font-data-mono text-[10px] text-on-surface-variant bg-surface-container px-2 py-1 rounded border border-outline-variant">
-                  Токены: ~{tokenCount}/8192
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Level 4 Administrators Registry Card */}
-          <div className="bg-surface-container rounded-lg border border-outline-variant p-6 relative shadow-xl">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-dashed border-outline-variant">
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-primary">verified_user</span>
-                <div>
-                  <h3 className="font-title-md text-title-md text-on-surface font-bold">
-                    Реестр Администраторов (Допуск Уровень 4)
-                  </h3>
-                  <p className="text-[11px] font-data-mono text-on-surface-variant">
-                    Аккаунты с полным доступом к управлению системой, хранящиеся в базе данных
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAddAdminModalOpen(true)}
-                className="bg-primary-container text-white px-3 py-1.5 rounded flex items-center gap-1 font-label-caps text-[11px] tracking-widest uppercase font-bold hover:bg-primary-container/80 transition-colors"
-              >
-                <span className="material-symbols-outlined text-sm">person_add</span>
-                Создать админа
-              </button>
-            </div>
-
-            <div className="divide-y divide-outline-variant/30 font-data-mono text-xs">
-              {admins.length === 0 ? (
-                <p className="text-on-surface-variant/70 italic py-3 text-xs">
-                  Администраторы загружаются из конфигурации...
-                </p>
-              ) : (
-                admins.map((adm) => (
-                  <div key={adm.id} className="py-3 flex items-center justify-between hover:bg-surface-container-high/40 px-2 rounded transition-colors">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-on-surface">{adm.name}</span>
-                        <span className="text-[10px] bg-secondary/10 border border-secondary text-secondary px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                          Уровень {adm.clearanceLevel || 4} • Полный доступ
-                        </span>
-                      </div>
-                      <span className="text-[11px] text-tertiary block mt-0.5">
-                        Логин: @{adm.email}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[10px] text-on-surface-variant">
-                        {adm.createdAt ? new Date(adm.createdAt).toLocaleDateString('ru-RU') : 'Системный'}
-                      </span>
-                      <button
-                        onClick={() => handleDeleteAdmin(adm.id)}
-                        className="text-on-surface-variant hover:text-error transition-colors p-1"
-                        title="Удалить допуск"
-                      >
-                        <span className="material-symbols-outlined text-base">delete</span>
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: API & Technical (4 cols) */}
-        <div className="lg:col-span-4 space-y-6">
-          {/* Provider Matrix */}
-          <div className="bg-surface-container rounded-lg border border-outline-variant p-6 relative shadow-xl">
-            <div className="flex items-center gap-3 mb-4 pb-3 border-b border-dashed border-outline-variant">
-              <span className="material-symbols-outlined text-primary">router</span>
-              <h3 className="font-title-md text-title-md text-on-surface font-bold">
-                Матрица провайдеров
-              </h3>
-            </div>
-
-            {/* Provider Selector */}
-            <div className="mb-5">
-              <label className="block font-label-caps text-label-caps text-on-surface-variant mb-2 uppercase tracking-widest text-[11px] font-bold">
-                Основной движок
-              </label>
-              <select
-                value={primaryEngine}
-                onChange={(e) => setPrimaryEngine(e.target.value)}
-                className="w-full bg-[#020617] text-on-surface font-body-md text-xs border border-outline-variant rounded px-3 py-2 outline-none focus:border-secondary transition-colors"
-              >
-                <option value="gemini-2.0-flash">Gemini 2.0 Flash (Основной / Рекомендуемый)</option>
-                <option value="gemini-1.5-pro">Gemini 1.5 Pro (Глубокий анализ)</option>
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash (Скоростной)</option>
-              </select>
-            </div>
-
-            {/* Status Indicator */}
-            <div className="flex items-center justify-between p-3 bg-surface-container-lowest border border-outline-variant rounded mb-5">
-              <div className="flex items-center gap-3">
-                <div className="relative flex h-3 w-3">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-secondary opacity-75" />
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-secondary-fixed" />
-                </div>
-                <span className="font-data-mono text-[11px] text-on-surface font-bold">
-                  Соединение стабильно
-                </span>
-              </div>
-              <span className="font-data-mono text-[10px] text-secondary">
-                Задержка: ~124мс
-              </span>
-            </div>
-
-            {/* Auto-Fallback Toggle */}
-            <div className="flex items-center justify-between border-t border-dashed border-outline-variant pt-4">
-              <div>
-                <span className="block font-label-caps text-[11px] text-on-surface mb-0.5 font-bold">
-                  Авто-ротация и Fallback
-                </span>
-                <span className="block text-[11px] text-on-surface-variant">
-                  Перенаправление при 429 квоте
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAutoFallback(!autoFallback)}
-                className={`w-10 h-6 rounded-full transition-colors relative flex items-center p-0.5 ${
-                  autoFallback ? 'bg-secondary' : 'bg-surface-container-highest border border-outline-variant'
-                }`}
-              >
-                <div
-                  className={`w-5 h-5 rounded-full bg-surface transition-transform ${
-                    autoFallback ? 'translate-x-4' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-            </div>
-          </div>
-
-          {/* Gemini API Keys Pool */}
-          <div className="bg-surface-container rounded-lg border border-outline-variant p-6 relative shadow-xl">
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-dashed border-outline-variant">
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-on-surface-variant">key</span>
-                <h3 className="font-title-md text-title-md text-on-surface font-bold">
-                  Пул API Ключей Gemini
-                </h3>
-              </div>
-              <button
-                onClick={() => setIsAddKeyModalOpen(true)}
-                className="text-primary hover:text-inverse-primary transition-colors flex items-center gap-1 font-label-caps text-[11px] tracking-widest uppercase font-bold"
-              >
-                <span className="material-symbols-outlined text-[16px]">add</span>
-                Добавить
-              </button>
-            </div>
-
-            <div className="mb-4">
-              <p className="font-body-md text-xs text-on-surface-variant leading-relaxed">
-                Система автоматически балансирует нагрузку и выполняет ротацию между активными ключами Gemini API при исчерпании лимитов.
+              <p className="text-xs text-on-surface-variant mt-0.5">
+                Эта модель автоматически используется по умолчанию для всех ботов, если у конкретного бота не задана персональная модель.
               </p>
             </div>
+          </div>
 
-            <div className="space-y-2">
-              {keys.map((k) => (
-                <div
-                  key={k.id}
-                  className="flex items-center justify-between px-3 py-2 bg-surface-container-lowest rounded border border-outline-variant/50 text-xs font-data-mono"
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-on-surface-variant font-mono-code">Текущая:</span>
+            <span className="bg-primary-container text-[#1a1a1a] font-bold font-mono-code text-xs px-2.5 py-1 rounded">
+              {primaryEngine}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+          <div>
+            <label className="block font-label-caps text-xs text-on-surface-variant uppercase mb-1.5 font-semibold">
+              Выбрать или ввести модель вручную
+            </label>
+            <input
+              type="text"
+              list="primary-models-list"
+              value={primaryEngine}
+              onChange={(e) => setPrimaryEngine(e.target.value)}
+              placeholder="gemini-3.6-flash, gemini-3.5-flash..."
+              className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-3.5 py-2 text-sm text-white font-mono-code focus:border-primary-container outline-none"
+            />
+            <datalist id="primary-models-list">
+              {availableModels.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+          </div>
+
+          <div>
+            <label className="block font-label-caps text-xs text-on-surface-variant uppercase mb-1.5 font-semibold">
+              Быстрый выбор рекомендованных моделей
+            </label>
+            <div className="flex flex-wrap gap-1.5">
+              {['gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPrimaryEngine(m)}
+                  className={`text-xs font-mono px-3 py-1.5 rounded border transition-colors ${
+                    primaryEngine === m
+                      ? 'bg-primary-container text-[#1a1a1a] font-bold border-primary-container'
+                      : 'bg-[#1a1a1a] text-on-surface-variant border-[#333333] hover:text-white hover:border-[#555555]'
+                  }`}
                 >
-                  <div>
-                    <p className="font-semibold text-on-surface">{k.name}</p>
-                    <p className="text-tertiary text-[10px]">{k.maskedKey}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-secondary border border-secondary/30 px-1.5 py-0.5 rounded">
-                      {k.status}
-                    </span>
-                    <button
-                      onClick={() => handleDeleteKey(k.id)}
-                      className="text-on-surface-variant hover:text-error transition-colors p-1"
-                    >
-                      <span className="material-symbols-outlined text-base">delete</span>
-                    </button>
-                  </div>
-                </div>
+                  {m} {m === 'gemini-3.6-flash' && '⭐️ (Осн)'}
+                </button>
               ))}
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Add Admin (Level 4) Modal */}
-      {isAddAdminModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-container-lowest/80 backdrop-blur-sm p-4">
-          <div className="bg-surface-container-low border border-outline-variant rounded-xl p-6 max-w-md w-full shadow-2xl relative">
-            <div className="flex justify-between items-center pb-3 border-b border-outline-variant mb-4">
-              <h3 className="font-headline-lg text-lg text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-secondary">verified_user</span>
-                Создать аккаунт администратора
+      {/* Section 2: API Keys Manager */}
+      <section className="bg-[#242424] border border-[#333333] rounded-lg p-6 flex flex-col gap-5 shadow-lg">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#333333] pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded bg-surface-container flex items-center justify-center border border-[#333333]">
+              <span className="material-symbols-outlined text-primary text-[22px]">key</span>
+            </div>
+            <div>
+              <h3 className="font-title-sm text-base text-on-background font-semibold">
+                Список API ключей ИИ
               </h3>
-              <button onClick={() => setIsAddAdminModalOpen(false)} className="text-on-surface-variant hover:text-on-surface">
-                <span className="material-symbols-outlined">close</span>
+              <p className="text-xs text-on-surface-variant mt-0.5">
+                Пул ключей Google Gemini, OpenAI, Claude для генерации ответов ботов.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Mode Toggle */}
+            <div className="flex items-center bg-[#1a1a1a] border border-[#333333] rounded p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setApiKeyMode('AUTO_ROTATION')}
+                className={`px-3 py-1.5 rounded transition-colors font-medium flex items-center gap-1.5 ${
+                  apiKeyMode === 'AUTO_ROTATION'
+                    ? 'bg-primary-container text-[#1a1a1a] font-bold'
+                    : 'text-on-surface-variant hover:text-white'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[14px]">autorenew</span>
+                Автосмена API (Ротация при 429)
+              </button>
+              <button
+                type="button"
+                onClick={() => setApiKeyMode('FIXED')}
+                className={`px-3 py-1.5 rounded transition-colors font-medium flex items-center gap-1.5 ${
+                  apiKeyMode === 'FIXED'
+                    ? 'bg-primary-container text-[#1a1a1a] font-bold'
+                    : 'text-on-surface-variant hover:text-white'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[14px]">pin</span>
+                Фиксированный ключ
               </button>
             </div>
-            <form onSubmit={handleAddAdmin} className="space-y-4 font-body-md text-xs">
-              <div>
-                <label className="block font-label-caps text-[11px] text-on-surface-variant uppercase mb-1 font-bold">
-                  Логин / Email оперативника *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={adminEmail}
-                  onChange={(e) => setAdminEmail(e.target.value)}
-                  placeholder="agent_morozov"
-                  className="w-full bg-surface-container border border-outline-variant rounded p-2 text-xs text-on-surface outline-none focus:border-secondary font-data-mono"
-                />
-              </div>
 
-              <div>
-                <label className="block font-label-caps text-[11px] text-on-surface-variant uppercase mb-1 font-bold">
-                  Отображаемое имя / Должность
-                </label>
-                <input
-                  type="text"
-                  value={adminName}
-                  onChange={(e) => setAdminName(e.target.value)}
-                  placeholder="Следователь Морозов"
-                  className="w-full bg-surface-container border border-outline-variant rounded p-2 text-xs text-on-surface outline-none focus:border-secondary"
-                />
-              </div>
-
-              <div>
-                <label className="block font-label-caps text-[11px] text-on-surface-variant uppercase mb-1 font-bold">
-                  Пароль доступа *
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={adminPassword}
-                  onChange={(e) => setAdminPassword(e.target.value)}
-                  placeholder="Секретный пароль"
-                  className="w-full bg-surface-container border border-outline-variant rounded p-2 text-xs text-on-surface font-data-mono outline-none focus:border-secondary"
-                />
-              </div>
-
-              <div>
-                <label className="block font-label-caps text-[11px] text-on-surface-variant uppercase mb-1 font-bold">
-                  Уровень допуска
-                </label>
-                <select
-                  value={adminClearance}
-                  onChange={(e) => setAdminClearance(e.target.value)}
-                  className="w-full bg-surface-container border border-outline-variant rounded p-2 text-xs text-secondary font-data-mono outline-none focus:border-secondary font-bold"
-                >
-                  <option value="4">УРОВЕНЬ 4 — ПОЛНЫЙ ДОСТУП (Super Admin)</option>
-                  <option value="3">УРОВЕНЬ 3 — СЛЕДОВАТЕЛЬ (Чтение / Редактирование ботов)</option>
-                  <option value="2">УРОВЕНЬ 2 — АРХИВАРИУС (Только просмотр данных)</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-outline-variant">
-                <button
-                  type="button"
-                  onClick={() => setIsAddAdminModalOpen(false)}
-                  className="px-4 py-2 text-on-surface-variant hover:text-on-surface text-xs"
-                >
-                  Отмена
-                </button>
-                <button
-                  type="submit"
-                  disabled={addingAdmin}
-                  className="px-5 py-2 bg-secondary text-surface-container-lowest rounded font-bold text-xs hover:bg-secondary-fixed-dim transition-colors flex items-center gap-1.5"
-                >
-                  <span className="material-symbols-outlined text-sm">check</span>
-                  {addingAdmin ? 'Сохранение...' : 'Создать и сохранить в БД'}
-                </button>
-              </div>
-            </form>
+            <button
+              type="button"
+              onClick={() => setIsAddKeyModalOpen(true)}
+              className="bg-[#333333] hover:bg-[#444444] text-white text-xs font-semibold px-4 py-2 rounded flex items-center gap-1.5 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[16px]">add</span>
+              Добавить API ключ
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Keys Table */}
+        <div className="overflow-x-auto border border-[#333333] rounded-lg">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-[#1a1a1a] border-b border-[#333333]">
+                <th className="py-3 px-4 font-label-caps text-xs text-on-surface-variant uppercase">
+                  Название
+                </th>
+                <th className="py-3 px-4 font-label-caps text-xs text-on-surface-variant uppercase">
+                  Провайдер
+                </th>
+                <th className="py-3 px-4 font-label-caps text-xs text-on-surface-variant uppercase">
+                  API Ключ
+                </th>
+                <th className="py-3 px-4 font-label-caps text-xs text-on-surface-variant uppercase">
+                  Статус
+                </th>
+                <th className="py-3 px-4 font-label-caps text-xs text-on-surface-variant uppercase">
+                  Запросов / Пинг
+                </th>
+                <th className="py-3 px-4 font-label-caps text-xs text-on-surface-variant uppercase">
+                  Доступные модели
+                </th>
+                <th className="py-3 px-4 font-label-caps text-xs text-on-surface-variant uppercase text-right">
+                  Действия
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#333333] text-xs">
+              {keys.map((k) => {
+                const isActive = k.status === 'ACTIVE';
+                const isCooldown = k.status === 'COOLDOWN';
+                const isSelectedFixed = apiKeyMode === 'FIXED' && activeApiKeyId === k.id;
+
+                return (
+                  <tr key={k.id} className="hover:bg-[#2c2c2c] transition-colors">
+                    <td className="py-3 px-4 font-medium text-white flex items-center gap-2">
+                      {k.name}
+                      {k.isPrimary && (
+                        <span className="bg-primary-container/20 border border-primary-container/40 text-primary text-[10px] font-mono-code px-1.5 py-0.5 rounded">
+                          Основной
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4">
+                      {getProviderBadge(k.provider)}
+                    </td>
+                    <td className="py-3 px-4 font-mono-code text-on-surface-variant">
+                      {k.maskedKey}
+                    </td>
+                    <td className="py-3 px-4">
+                      {isActive ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] bg-emerald-950/40 border border-emerald-500/40 text-emerald-400 font-semibold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          Активен
+                        </span>
+                      ) : isCooldown ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] bg-amber-950/40 border border-amber-500/40 text-amber-400 font-semibold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          Лимит (429)
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] bg-red-950/40 border border-red-500/40 text-red-400 font-semibold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                          Ошибка
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 font-mono-code text-on-surface-variant">
+                      {k.requestCount} req • {k.latencyMs} ms
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-1 max-w-xs">
+                        {k.supportedModels && k.supportedModels.length > 0 ? (
+                          k.supportedModels.slice(0, 3).map((mod) => (
+                            <span
+                              key={mod}
+                              className="bg-[#1a1a1a] border border-[#333333] text-[10px] font-mono-code text-primary px-1.5 py-0.5 rounded"
+                            >
+                              {mod}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[10px] text-on-surface-variant italic">
+                            gemini-3.6-flash
+                          </span>
+                        )}
+                        {k.supportedModels && k.supportedModels.length > 3 && (
+                          <span className="text-[10px] text-on-surface-variant">
+                            +{k.supportedModels.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {apiKeyMode === 'FIXED' ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveApiKeyId(k.id);
+                              handleSetPrimaryKey(k.id);
+                            }}
+                            className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
+                              isSelectedFixed
+                                ? 'bg-primary-container text-[#1a1a1a]'
+                                : 'bg-[#1a1a1a] hover:bg-[#333333] text-white border border-[#333333]'
+                            }`}
+                          >
+                            {isSelectedFixed ? 'Выбран' : 'Выбрать'}
+                          </button>
+                        ) : (
+                          !k.isPrimary && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetPrimaryKey(k.id)}
+                              className="text-on-surface-variant hover:text-primary transition-colors text-xs"
+                              title="Сделать приоритетным"
+                            >
+                              В топ
+                            </button>
+                          )
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleTestKey(k.id)}
+                          disabled={testingKeyId === k.id}
+                          className="text-on-surface-variant hover:text-white transition-colors p-1"
+                          title="Проверить ключ и актуализировать модели"
+                        >
+                          <span
+                            className={`material-symbols-outlined text-[16px] ${
+                              testingKeyId === k.id ? 'animate-spin' : ''
+                            }`}
+                          >
+                            refresh
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteKey(k.id, k.name)}
+                          className="text-on-surface-variant hover:text-error transition-colors p-1"
+                          title="Удалить ключ"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Grid: Global System Prompt & Fallback Bot */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-grid-gutter">
+        {/* Left: Global System Prompt */}
+        <section className="lg:col-span-2 space-y-stack-gap">
+          <div className="bg-[#242424] border border-[#333333] rounded-lg p-6 flex flex-col h-full shadow-lg">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="material-symbols-outlined text-primary">terminal</span>
+              <h3 className="font-title-sm text-base text-on-background font-semibold">
+                Глобальный системный промпт
+              </h3>
+            </div>
+            <p className="text-xs text-on-surface-variant mb-3">
+              Этот системный контекст автоматически наследуется всеми ботами платформы.
+            </p>
+            <div className="flex flex-col flex-1">
+              <textarea
+                rows={10}
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                placeholder="Введите глобальный контекст для всех ботов..."
+                className="w-full flex-1 min-h-[220px] bg-surface border border-[#333333] rounded p-4 text-on-surface font-mono-code text-xs focus:border-primary-container focus:ring-1 focus:ring-primary-container outline-none transition-colors resize-y leading-relaxed"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Right: Fallback Bot & Parameters */}
+        <section className="space-y-stack-gap">
+          <div className="bg-[#242424] border border-[#333333] rounded-lg p-6 shadow-lg flex flex-col gap-6">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-primary">smart_toy</span>
+              <h3 className="font-title-sm text-base text-on-background font-semibold">
+                Резервный бот (Fallback)
+              </h3>
+            </div>
+
+            {/* Auto-Fallback Toggle */}
+            <div className="flex items-center justify-between border-b border-[#333333] pb-4">
+              <div>
+                <p className="font-body-base text-on-background font-semibold text-sm">
+                  Автопереключение на резервного бота
+                </p>
+                <p className="text-xs text-on-surface-variant mt-0.5">
+                  Если бот отключен или возвращает ошибку
+                </p>
+              </div>
+              <div
+                onClick={() => setAutoFallback(!autoFallback)}
+                className="relative inline-block w-12 align-middle select-none transition duration-200 cursor-pointer"
+              >
+                <div
+                  className={`w-12 h-6 rounded-full transition-colors ${
+                    autoFallback ? 'bg-primary-container' : 'bg-[#333333]'
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-white transition-transform duration-200 ease-in-out transform mt-0.5 ml-0.5 ${
+                      autoFallback ? 'translate-x-6' : 'translate-x-0 bg-[#888888]'
+                    }`}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Select Fallback Bot */}
+            <div>
+              <label className="font-label-caps text-xs text-on-surface-variant uppercase mb-2 block font-semibold">
+                Выберите резервного бота
+              </label>
+              <select
+                value={fallbackBotId}
+                onChange={(e) => setFallbackBotId(e.target.value)}
+                className="w-full bg-surface border border-[#333333] rounded p-3 text-on-surface text-sm focus:border-primary-container outline-none cursor-pointer"
+              >
+                <option value="">Без резервного бота</option>
+                {bots.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b.username || b.role})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="bg-[#1a1a1a] border border-[#333333] rounded p-3 text-xs text-on-surface-variant leading-relaxed">
+              💡 При включенном автопереключении, любые необработанные запросы перенаправляются на выбранного резервного бота.
+            </div>
+          </div>
+        </section>
+      </div>
 
       {/* Add API Key Modal */}
       {isAddKeyModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface-container-lowest/80 backdrop-blur-sm p-4">
-          <div className="bg-surface-container-low border border-outline-variant rounded-xl p-6 max-w-md w-full shadow-2xl relative">
-            <h3 className="font-headline-lg text-lg text-on-surface mb-3">
-              Добавить API ключ Gemini в пул
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="bg-[#242424] border border-[#333333] rounded-xl p-6 max-w-md w-full shadow-2xl modal-animate">
+            <h3 className="font-title-sm text-base text-on-surface font-bold mb-4 flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">key</span>
+              Добавить API ключ
             </h3>
+
             <form onSubmit={handleAddKey} className="space-y-4">
               <div>
-                <label className="block font-label-caps text-[11px] text-on-surface-variant uppercase mb-1">
+                <label className="block font-label-caps text-xs text-on-surface-variant uppercase mb-1">
                   Название ключа
                 </label>
                 <input
                   type="text"
-                  value={keyName}
-                  onChange={(e) => setKeyName(e.target.value)}
-                  placeholder="Например: Gemini Key 2 (Резерв)"
-                  className="w-full bg-surface-container border border-outline-variant rounded p-2 text-xs text-on-surface outline-none focus:border-secondary"
+                  value={newKeyName}
+                  onChange={(e) => setNewKeyName(e.target.value)}
+                  placeholder="Например: Основной Gemini Flash"
+                  className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-3 py-2 text-sm text-white focus:border-primary-container outline-none"
                 />
               </div>
 
               <div>
-                <label className="block font-label-caps text-[11px] text-on-surface-variant uppercase mb-1">
-                  Секретный ключ Google Gemini *
+                <label className="block font-label-caps text-xs text-on-surface-variant uppercase mb-1">
+                  API Ключ *
                 </label>
                 <input
-                  type="password"
+                  type="text"
                   required
-                  value={newKey}
-                  onChange={(e) => setNewKey(e.target.value)}
-                  placeholder="AIzaSyB-..."
-                  className="w-full bg-surface-container border border-outline-variant rounded p-2 text-xs text-on-surface font-data-mono outline-none focus:border-secondary"
+                  value={newKeyValue}
+                  onChange={(e) => setNewKeyValue(e.target.value)}
+                  placeholder="AIzaSy... или AQ.Ab8..."
+                  className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-3 py-2 text-sm text-white font-mono-code focus:border-primary-container outline-none"
                 />
+                <p className="text-[11px] text-on-surface-variant mt-1">
+                  Поддерживаются Google Gemini, OpenAI, Claude, OpenRouter. Провайдер и модели определяются автоматически.
+                </p>
               </div>
 
-              <div className="flex justify-end gap-3 pt-2 border-t border-outline-variant">
+              <div>
+                <label className="block font-label-caps text-xs text-on-surface-variant uppercase mb-1">
+                  Использовать модель как основную по умолчанию
+                </label>
+                <input
+                  type="text"
+                  list="modal-models-list"
+                  value={newKeyDefaultModel}
+                  onChange={(e) => setNewKeyDefaultModel(e.target.value)}
+                  placeholder="gemini-3.6-flash"
+                  className="w-full bg-[#1a1a1a] border border-[#333333] rounded px-3 py-2 text-sm text-white font-mono-code focus:border-primary-container outline-none"
+                />
+                <datalist id="modal-models-list">
+                  {availableModels.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t border-[#333333]">
                 <button
                   type="button"
                   onClick={() => setIsAddKeyModalOpen(false)}
-                  className="px-4 py-2 text-on-surface-variant hover:text-on-surface text-xs"
+                  className="px-4 py-2 border border-[#333333] text-white rounded text-xs"
                 >
                   Отмена
                 </button>
                 <button
                   type="submit"
                   disabled={addingKey}
-                  className="px-5 py-2 bg-secondary text-surface-container-lowest rounded font-bold text-xs hover:bg-secondary-fixed-dim transition-colors"
+                  className="px-5 py-2 bg-primary-container text-[#1a1a1a] font-bold rounded text-xs hover:opacity-90 disabled:opacity-50"
                 >
-                  {addingKey ? 'Сохранение...' : 'Добавить в пул'}
+                  {addingKey ? 'Проверка...' : 'Добавить и установить'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }

@@ -11,7 +11,7 @@ export default async function UsersPage() {
   const users = await prisma.telegramUser.findMany({
     include: {
       dialogues: {
-        take: 10,
+        take: 5,
         orderBy: { createdAt: 'desc' },
         include: { bot: true },
       },
@@ -21,8 +21,8 @@ export default async function UsersPage() {
 
   return (
     <>
-      <Header title="Реестр улик" badge="СУБЪЕКТЫ" />
-      <main className="pt-20 px-container-padding pb-20 min-h-screen">
+      <Header title="Пользователи" />
+      <main className="pt-20 px-container-padding pb-10 min-h-screen">
         <UsersClient initialUsers={users} />
       </main>
     </>

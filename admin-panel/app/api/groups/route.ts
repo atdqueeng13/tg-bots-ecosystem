@@ -32,29 +32,32 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { code, title, reward, lore, coverUrl, status } = body;
+    const { title, lore, prompt, coverUrl, status, solutionTruth, isGuiltyBotId, starsPrice } = body;
 
-    if (!code || !title || !lore) {
-      return NextResponse.json(
-        { error: 'Код дела, название и общий лор обязательны' },
-        { status: 400 }
-      );
+    if (!title || title.trim() === '') {
+      return NextResponse.json({ error: 'Название группы обязательно' }, { status: 400 });
     }
 
-    const newGroup = await prisma.group.create({
+    const code = `case_${Math.random().toString(36).substring(2, 7)}`;
+
+    const group = await prisma.group.create({
       data: {
         code,
-        title,
-        reward: reward || '$5,000',
-        lore,
-        coverUrl:
-          coverUrl ||
-          'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=800&auto=format&fit=crop',
+        title: title.trim(),
+        lore: lore || '',
+        prompt: prompt || '',
+        solutionTruth: solutionTruth || '',
+        isGuiltyBotId: isGuiltyBotId || null,
+        starsPrice: starsPrice !== undefined ? Number(starsPrice) : 50,
+        coverUrl: coverUrl || null,
         status: status || 'ACTIVE',
+      },
+      include: {
+        bots: true,
       },
     });
 
-    return NextResponse.json({ group: newGroup });
+    return NextResponse.json({ success: true, group });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message }, { status: 500 });
   }

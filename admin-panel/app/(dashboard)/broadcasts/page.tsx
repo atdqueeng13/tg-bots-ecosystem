@@ -8,20 +8,17 @@ export const dynamic = 'force-dynamic';
 export default async function BroadcastsPage() {
   await ensureInitialData();
 
-  const [broadcasts, groups] = await Promise.all([
-    prisma.broadcast.findMany({
-      orderBy: { createdAt: 'desc' },
-    }),
-    prisma.group.findMany({
-      orderBy: { title: 'asc' },
-    }),
-  ]);
+  const broadcasts = await prisma.broadcast.findMany({
+    orderBy: { createdAt: 'desc' },
+  });
 
   return (
     <>
-      <Header title="Реестр Доказательств" badge="РАССЫЛКИ" />
-      <main className="pt-20 p-container-padding min-h-screen">
-        <BroadcastsClient initialBroadcasts={broadcasts} groups={groups} />
+      <Header title="Управление рассылками" />
+      <main className="pt-20 px-8 pb-16 min-h-screen bg-background">
+        <div className="max-w-7xl mx-auto space-y-8">
+          <BroadcastsClient initialBroadcasts={broadcasts} activeUsersCount={0} />
+        </div>
       </main>
     </>
   );

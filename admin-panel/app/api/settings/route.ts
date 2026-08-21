@@ -29,20 +29,35 @@ export async function PUT(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { systemPrompt, primaryEngine, autoFallback } = body;
+    const {
+      systemPrompt,
+      primaryEngine,
+      apiKeyMode,
+      activeApiKeyId,
+      fallbackBotId,
+      autoFallback,
+    } = body;
 
     const updated = await prisma.globalSetting.upsert({
       where: { id: 'global' },
       update: {
         ...(systemPrompt !== undefined && { systemPrompt }),
         ...(primaryEngine !== undefined && { primaryEngine }),
-        ...(autoFallback !== undefined && { autoFallback }),
+        ...(apiKeyMode !== undefined && { apiKeyMode }),
+        ...(activeApiKeyId !== undefined && { activeApiKeyId }),
+        ...(fallbackBotId !== undefined && { fallbackBotId: fallbackBotId || null }),
+        ...(autoFallback !== undefined && { autoFallback: !!autoFallback }),
       },
       create: {
         id: 'global',
-        systemPrompt: systemPrompt || '',
+        systemPrompt:
+          systemPrompt ||
+          'Ты — ИИ-ассистент в экосистеме Telegram-ботов Sherlock. Отвечай структурированно, профессионально и по существу.',
         primaryEngine: primaryEngine || 'gemini-2.0-flash',
-        autoFallback: autoFallback !== undefined ? autoFallback : true,
+        apiKeyMode: apiKeyMode || 'AUTO_ROTATION',
+        activeApiKeyId: activeApiKeyId || null,
+        fallbackBotId: fallbackBotId || null,
+        autoFallback: autoFallback !== undefined ? !!autoFallback : true,
       },
     });
 

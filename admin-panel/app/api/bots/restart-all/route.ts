@@ -9,18 +9,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Update all bots' lastPing and ensure status is ACTIVE
-    await prisma.bot.updateMany({
+    const now = new Date();
+    // Update all active bots ping & status
+    const updateResult = await prisma.bot.updateMany({
+      where: { isActive: true },
       data: {
-        lastPing: new Date(),
+        lastPing: now,
         status: 'ACTIVE',
       },
     });
 
     return NextResponse.json({
       success: true,
-      message: 'Сигнал глобального перезапуска успешно передан всем активным ботам.',
-      timestamp: new Date().toISOString(),
+      restartedCount: updateResult.count,
+      timestamp: now.toISOString(),
+      message: `Успешно перезапущено ${updateResult.count} активных ботов.`,
     });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message }, { status: 500 });

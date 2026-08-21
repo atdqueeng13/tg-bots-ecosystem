@@ -1,6 +1,5 @@
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
-import { ensureInitialData } from '@/lib/seed-data';
 import { Header } from '@/components/Header';
 import { BotDetailClient } from './bot-detail-client';
 
@@ -11,21 +10,11 @@ export default async function BotDetailPage({
 }: {
   params: { id: string };
 }) {
-  await ensureInitialData();
-
-  const [bot, groups] = await Promise.all([
-    prisma.bot.findFirst({
-      where: {
-        OR: [{ id: params.id }, { botId: params.id }],
-      },
-      include: {
-        group: true,
-      },
-    }),
-    prisma.group.findMany({
-      orderBy: { title: 'asc' },
-    }),
-  ]);
+  const bot = await prisma.bot.findFirst({
+    where: {
+      OR: [{ id: params.id }, { botId: params.id }],
+    },
+  });
 
   if (!bot) {
     notFound();
@@ -33,12 +22,11 @@ export default async function BotDetailPage({
 
   return (
     <>
-      <Header
-        title="Реестр улик"
-        badge={`ДЕЛО: ${bot.group?.code || 'NO_CASE'}`}
-      />
-      <main className="flex-grow pt-20 p-container-padding bg-surface-dim dossier-texture flex gap-6 min-h-screen">
-        <BotDetailClient initialBot={bot} groups={groups} />
+      <Header title={`Бот: ${bot.name}`} />
+      <main className="pt-20 px-8 pb-16 min-h-screen bg-background">
+        <div className="max-w-6xl mx-auto">
+          <BotDetailClient initialBot={bot} />
+        </div>
       </main>
     </>
   );
