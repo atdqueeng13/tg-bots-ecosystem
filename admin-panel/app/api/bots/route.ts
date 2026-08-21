@@ -138,11 +138,16 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Auto-set Webhook if public app URL is present
-    const appUrl = process.env.NEXTAUTH_URL || process.env.PUBLIC_APP_URL;
-    if (appUrl && appUrl.startsWith('https://')) {
+    // Auto-set Webhook with Telegram API
+    const reqHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || process.env.VERCEL_URL || '';
+    const reqProto = req.headers.get('x-forwarded-proto') || (reqHost.includes('localhost') ? 'http' : 'https');
+    const appUrl = reqHost
+      ? `${reqProto}://${reqHost}`
+      : (process.env.NEXT_PUBLIC_APP_URL || process.env.PUBLIC_APP_URL || 'https://admin-panel-gilt-three.vercel.app');
+
+    if (cleanToken.includes(':') && appUrl.startsWith('https://')) {
       try {
-        await fetch(`https://api.telegram.org/bot${cleanToken}/setWebhook?url=${appUrl}/api/bot-webhook/${newBot.id}`);
+        await fetch(`https://api.telegram.org/bot${cleanToken}/setWebhook?url=${appUrl}/api/bot-webhook/${newBot.id}&drop_pending_updates=false`);
       } catch (err) {
         console.warn('Auto webhook setup warning:', err);
       }

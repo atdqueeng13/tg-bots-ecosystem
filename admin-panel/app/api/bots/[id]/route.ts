@@ -133,6 +133,22 @@ export async function PUT(
       },
     });
 
+    // Auto-sync Webhook with Telegram API if token is present
+    const cleanToken = (token || updatedBot.token || '').trim();
+    const reqHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || process.env.VERCEL_URL || '';
+    const reqProto = req.headers.get('x-forwarded-proto') || (reqHost.includes('localhost') ? 'http' : 'https');
+    const appUrl = reqHost
+      ? `${reqProto}://${reqHost}`
+      : (process.env.NEXT_PUBLIC_APP_URL || process.env.PUBLIC_APP_URL || 'https://admin-panel-gilt-three.vercel.app');
+
+    if (cleanToken.includes(':') && appUrl.startsWith('https://')) {
+      try {
+        await fetch(`https://api.telegram.org/bot${cleanToken}/setWebhook?url=${appUrl}/api/bot-webhook/${updatedBot.id}&drop_pending_updates=false`);
+      } catch (err) {
+        console.warn('Auto setWebhook warning on PUT:', err);
+      }
+    }
+
     return NextResponse.json({ bot: updatedBot });
   } catch (error: any) {
     return NextResponse.json({ error: error?.message }, { status: 500 });

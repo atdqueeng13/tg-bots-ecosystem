@@ -78,11 +78,15 @@ export async function POST(
     const username = fromUser.username || null;
     const firstName = fromUser.first_name || null;
     const lastName = fromUser.last_name || null;
+    // Derive dynamic application base URL from incoming request
+    const reqHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || process.env.VERCEL_URL || '';
+    const reqProto = req.headers.get('x-forwarded-proto') || (reqHost.includes('localhost') ? 'http' : 'https');
+    const appUrl = reqHost
+      ? `${reqProto}://${reqHost}`
+      : (process.env.NEXTAUTH_URL || process.env.PUBLIC_APP_URL || 'https://admin-panel-gilt-three.vercel.app');
 
     // --- 1. MAIN GAME HUB BOT HANDLING ---
     if (bot.isMainHub) {
-      const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
-
       // Helper to dispatch hub message with photo or text
       const sendHubPayload = async (hubData: any) => {
         if (!hubData?.text && !hubData?.mediaUrl) return;
@@ -334,7 +338,6 @@ export async function POST(
         action: 'typing',
       });
 
-      const appUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
       const dialogueRes = await fetch(`${appUrl}/api/bot-runtime/dialogue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

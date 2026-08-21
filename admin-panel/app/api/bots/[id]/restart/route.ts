@@ -67,9 +67,24 @@ export async function POST(
       },
     });
 
+    // Auto-sync Webhook with Telegram API on restart
+    const reqHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || process.env.VERCEL_URL || '';
+    const reqProto = req.headers.get('x-forwarded-proto') || (reqHost.includes('localhost') ? 'http' : 'https');
+    const appUrl = reqHost
+      ? `${reqProto}://${reqHost}`
+      : (process.env.NEXT_PUBLIC_APP_URL || process.env.PUBLIC_APP_URL || 'https://admin-panel-gilt-three.vercel.app');
+
+    if (bot.token && bot.token.includes(':') && appUrl.startsWith('https://')) {
+      try {
+        await fetch(`https://api.telegram.org/bot${bot.token}/setWebhook?url=${appUrl}/api/bot-webhook/${bot.id}&drop_pending_updates=false`);
+      } catch (err) {
+        console.warn('Auto setWebhook warning on restart:', err);
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      message: `Бот "${bot.name}" успешно перезапущен и синхронизирован!`,
+      message: `Бот "${bot.name}" успешно перезапущен и синхронизирован с Telegram!`,
       bot: updatedBot,
     });
   } catch (error: any) {
