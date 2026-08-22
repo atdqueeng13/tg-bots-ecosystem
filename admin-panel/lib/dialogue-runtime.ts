@@ -266,10 +266,14 @@ export async function handleDialogueRuntime(params: DialogueRuntimeParams): Prom
         }
       );
 
+      const promptToSend = userMessage.startsWith('/start')
+        ? 'Детектив заходит к вам на допрос и представляется. Поприветствуйте его строго в своем характере, спросите, что ему нужно, и выразите свое отношение к происходящему в театре.'
+        : userMessage;
+
       const aiResult = await generateWithGemini({
         systemPrompt: fullSystemPrompt,
-        userPrompt: userMessage,
-        history: chatHistory,
+        userPrompt: promptToSend,
+        history: userMessage.startsWith('/start') ? [] : chatHistory,
         modelName: bot.model || 'gemini-3.6-flash',
         temperature: bot.temperature !== undefined ? bot.temperature : 0.8,
       });

@@ -343,11 +343,19 @@ export async function POST(
       const replyText = dialogueResult.botResponse || 'Я внимательно слушаю ваш вопрос, детектив.';
       const chunks = splitMessage(replyText);
 
-      for (const chunk of chunks) {
+      for (let i = 0; i < chunks.length; i++) {
+        const isLast = i === chunks.length - 1;
         await telegramCall(bot.token, 'sendMessage', {
           chat_id: chatId,
-          text: chunk,
+          text: chunks[i],
           parse_mode: 'Markdown',
+          reply_markup: isLast
+            ? {
+                inline_keyboard: [
+                  [{ text: '🕵️‍♂️ Вернуться в Главный Хаб к Шефу', url: 'https://t.me/sherlock_main_bot' }],
+                ],
+              }
+            : undefined,
         });
       }
 

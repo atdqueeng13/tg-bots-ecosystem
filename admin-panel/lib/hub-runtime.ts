@@ -390,7 +390,7 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
       if (targetCase.starsPrice > 0 && !casesAccessed.includes(targetCase.id)) {
         return {
           success: true,
-          text: `🔒 *ДЕЛО ЗАКРЫТО В АРХИВЕ*\n\n📁 **${targetCase.title}**\n\n${targetCase.description || ''}\n\n⭐ *Стоимость доступа:* **${targetCase.starsPrice} Stars**\n\nОплатите доступ, чтобы получить материалы дела и доступ к допросу подозреваемых:`,
+          text: `🔒 *ДЕЛО ЗАКРЫТО В АРХИВЕ*\n\n📁 **${targetCase.title}**\n\n${targetCase.lore || ''}\n\n⭐ *Стоимость доступа:* **${targetCase.starsPrice} Stars**\n\nОплатите доступ, чтобы получить материалы дела и доступ к допросу подозреваемых:`,
           buttons: [
             {
               text: `⭐ Разблокировать за ${targetCase.starsPrice} Stars`,
