@@ -334,16 +334,33 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
 
     // --- 4. ACTION: SELECT CASE ---
     if (action === 'select_case') {
-      const targetCase = await prisma.group.findUnique({
-        where: { id: caseId || '' },
-        include: {
-          bots: {
-            where: { isActive: true },
-            select: { id: true, name: true, role: true, username: true, orderIndex: true },
-            orderBy: { orderIndex: 'asc' },
+      let targetCase = caseId
+        ? await prisma.group.findFirst({
+            where: {
+              OR: [{ id: caseId }, { code: caseId }, { name: caseId }],
+            },
+            include: {
+              bots: {
+                where: { isActive: true },
+                select: { id: true, name: true, role: true, username: true, orderIndex: true },
+                orderBy: { orderIndex: 'asc' },
+              },
+            },
+          })
+        : null;
+
+      if (!targetCase) {
+        targetCase = await prisma.group.findFirst({
+          where: { status: 'ACTIVE' },
+          include: {
+            bots: {
+              where: { isActive: true },
+              select: { id: true, name: true, role: true, username: true, orderIndex: true },
+              orderBy: { orderIndex: 'asc' },
+            },
           },
-        },
-      });
+        });
+      }
 
       if (!targetCase) {
         return { success: false, error: 'Дело не найдено' };
@@ -363,19 +380,26 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
       } else {
         await prisma.telegramUser.update({
           where: { id: user.id },
-          data: { activeCaseId: targetCase.id, stage: 'INVESTIGATING' },
+          data: {
+            activeCaseId: targetCase.id,
+          },
         });
       }
 
-      const isPaidAndLocked = targetCase.starsPrice > 0 && !casesAccessed.includes(targetCase.id);
-
-      if (isPaidAndLocked) {
+      // If paid case and not yet accessed, show price and payment button
+      if (targetCase.starsPrice > 0 && !casesAccessed.includes(targetCase.id)) {
         return {
           success: true,
-          text: `📁 *${targetCase.title}*\n\n📜 *Обстоятельства преступления:*\n${targetCase.lore || 'Детали закрыты грифом секретности.'}\n\n⭐ *Стоимость доступа:* ${targetCase.starsPrice} Telegram Stars\nОплатите доступ для вызова подозреваемых на допрос:`,
+          text: `🔒 *ДЕЛО ЗАКРЫТО В АРХИВЕ*\n\n📁 **${targetCase.title}**\n\n${targetCase.description || ''}\n\n⭐ *Стоимость доступа:* **${targetCase.starsPrice} Stars**\n\nОплатите доступ, чтобы получить материалы дела и доступ к допросу подозреваемых:`,
           buttons: [
-            { text: `⭐ Открыть дело (${targetCase.starsPrice} Stars)`, callback_data: `pay_case:${targetCase.id}` },
-            { text: '⬅️ Назад в архив дел', callback_data: 'hub:cases' },
+            {
+              text: `⭐ Разблокировать за ${targetCase.starsPrice} Stars`,
+              callback_data: `pay_case:${targetCase.id}`,
+            },
+            {
+              text: '📂 Назад к архиву Дел',
+              callback_data: 'hub:cases',
+            },
           ],
         };
       }
@@ -398,16 +422,31 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
         });
       }
 
-      const unlockedCase = await prisma.group.findUnique({
-        where: { id: caseId || '' },
-        include: {
-          bots: {
-            where: { isActive: true },
-            select: { id: true, name: true, role: true, username: true, orderIndex: true },
-            orderBy: { orderIndex: 'asc' },
+      let unlockedCase = caseId
+        ? await prisma.group.findFirst({
+            where: { OR: [{ id: caseId }, { code: caseId }, { name: caseId }] },
+            include: {
+              bots: {
+                where: { isActive: true },
+                select: { id: true, name: true, role: true, username: true, orderIndex: true },
+                orderBy: { orderIndex: 'asc' },
+              },
+            },
+          })
+        : null;
+
+      if (!unlockedCase) {
+        unlockedCase = await prisma.group.findFirst({
+          where: { status: 'ACTIVE' },
+          include: {
+            bots: {
+              where: { isActive: true },
+              select: { id: true, name: true, role: true, username: true, orderIndex: true },
+              orderBy: { orderIndex: 'asc' },
+            },
           },
-        },
-      });
+        });
+      }
 
       if (!unlockedCase) {
         return { success: false, error: 'Дело не найдено' };
@@ -425,16 +464,16 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
     if (action === 'accuse_confirm') {
       const caseIdToUse = caseId || user.activeCaseId;
       let targetCase = caseIdToUse
-        ? await prisma.group.findUnique({
-            where: { id: caseIdToUse },
-            include: { bots: true },
+        ? await prisma.group.findFirst({
+            where: { OR: [{ id: caseIdToUse }, { code: caseIdToUse }, { name: caseIdToUse }] },
+            include: { bots: { where: { isActive: true }, orderBy: { orderIndex: 'asc' } } },
           })
         : null;
 
       if (!targetCase) {
         targetCase = await prisma.group.findFirst({
           where: { status: 'ACTIVE' },
-          include: { bots: true },
+          include: { bots: { where: { isActive: true }, orderBy: { orderIndex: 'asc' } } },
         });
       }
 
@@ -442,9 +481,16 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
         return { success: false, error: 'Дело не найдено' };
       }
 
-      const accusedBot = targetCase.bots.find((b: any) => b.id === accusedBotId);
+      let accusedBot = targetCase.bots.find((b: any) => b.id === accusedBotId || b.botId === accusedBotId);
       if (!accusedBot) {
-        return { success: false, error: 'Подозреваемый не найден' };
+        const idx = parseInt(String(accusedBotId).replace('bot_', '')) - 1;
+        if (!isNaN(idx) && targetCase.bots[idx]) {
+          accusedBot = targetCase.bots[idx];
+        }
+      }
+
+      if (!accusedBot) {
+        return await handleAccuseSelect(targetCase.id);
       }
 
       const confirmText = `⚖️ *ПОДТВЕРЖДЕНИЕ ОБВИНЕНИЯ*\n\nВы официально предъявляете обвинение в убийстве подозреваемому:\n👤 **${accusedBot.name}** _(${accusedBot.role || 'Подозреваемый'})_\n\n⚠️ *Внимание: отозвать обвинение будет невозможно. Это решение окончательно завершит следствие по делу!*`;
@@ -469,12 +515,6 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
     if (action === 'accuse_execute' || action === 'submit_accusation') {
       const caseIdToUse = caseId || user.activeCaseId;
       let targetCase = caseIdToUse
-        ? await prisma.group.findUnique({
-            where: { id: caseIdToUse },
-            include: { bots: true },
-          })
-        : null;
-
       if (!targetCase) {
         targetCase = await prisma.group.findFirst({
           where: { status: 'ACTIVE' },
