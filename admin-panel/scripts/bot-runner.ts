@@ -135,21 +135,25 @@ async function processUpdate(bot: any, update: any) {
         await dispatchHubResponse(bot.token, chatId, result);
         return;
       }
-      if (data.startsWith('accuse_menu:')) {
-        const caseId = data.replace('accuse_menu:', '');
+      if (data === 'acc_m' || data.startsWith('acc_m:') || data.startsWith('accuse_menu:')) {
+        const caseId = data.includes(':') ? data.split(':')[1] : null;
         const result = await handleHubRuntime({ telegramId, username, firstName, lastName, action: 'accuse_select', caseId });
         await dispatchHubResponse(bot.token, chatId, result);
         return;
       }
-      if (data.startsWith('accuse_confirm:')) {
+      if (data.startsWith('acc_c:') || data.startsWith('accuse_confirm:')) {
         const parts = data.split(':');
-        const result = await handleHubRuntime({ telegramId, username, firstName, lastName, action: 'accuse_confirm', caseId: parts[1], accusedBotId: parts[2] });
+        const accusedBotId = parts.length === 3 ? parts[2] : parts[1];
+        const caseId = parts.length === 3 ? parts[1] : null;
+        const result = await handleHubRuntime({ telegramId, username, firstName, lastName, action: 'accuse_confirm', caseId, accusedBotId });
         await dispatchHubResponse(bot.token, chatId, result);
         return;
       }
-      if (data.startsWith('accuse_execute:')) {
+      if (data.startsWith('acc_x:') || data.startsWith('accuse_execute:')) {
         const parts = data.split(':');
-        const result = await handleHubRuntime({ telegramId, username, firstName, lastName, action: 'accuse_execute', caseId: parts[1], accusedBotId: parts[2] });
+        const accusedBotId = parts.length === 3 ? parts[2] : parts[1];
+        const caseId = parts.length === 3 ? parts[1] : null;
+        const result = await handleHubRuntime({ telegramId, username, firstName, lastName, action: 'accuse_execute', caseId, accusedBotId });
         await dispatchHubResponse(bot.token, chatId, result);
         return;
       }

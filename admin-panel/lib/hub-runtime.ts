@@ -231,7 +231,7 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
 
       const buttons: HubButton[] = activeCase.bots.map((b: any, idx: number) => ({
         text: `🎯 #${b.orderIndex || idx + 1} ${b.name}`,
-        callback_data: `accuse_confirm:${activeCase.id}:${b.id}`,
+        callback_data: `acc_c:${b.id}`,
       }));
 
       buttons.push({
@@ -455,11 +455,11 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
         buttons: [
           {
             text: `🎯 Да, подтверждаю обвинение!`,
-            callback_data: `accuse_execute:${targetCase.id}:${accusedBot.id}`,
+            callback_data: `acc_x:${accusedBot.id}`,
           },
           {
             text: `❌ Отмена (вернуться к выбору)`,
-            callback_data: `accuse_menu:${targetCase.id}`,
+            callback_data: `acc_m`,
           },
         ],
       };
@@ -612,9 +612,9 @@ ${accusedBot?.name || 'Преступник'} идёт в наручниках �
                 buttons: [
                   {
                     text: `🎯 Да, обвинить: ${suspect.name}`,
-                    callback_data: `accuse_execute:${activeCase.id}:${suspect.id}`,
+                    callback_data: `acc_x:${suspect.id}`,
                   },
-                  { text: '❌ Отмена', callback_data: `accuse_menu:${activeCase.id}` },
+                  { text: '❌ Отмена', callback_data: `acc_m` },
                 ],
               };
             }
@@ -656,9 +656,7 @@ ${accusedBot?.name || 'Преступник'} идёт в наручниках �
         text: aiResponse.text,
         buttons: [
           { text: '📂 Открыть архив Дел (/cases)', callback_data: 'hub:cases' },
-          ...(user.activeCaseId
-            ? [{ text: '⚖️ Обвинить (/accuse)', callback_data: `accuse_menu:${user.activeCaseId}` }]
-            : []),
+          { text: '⚖️ Обвинить (/accuse)', callback_data: 'acc_m' },
         ],
       };
     }

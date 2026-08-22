@@ -203,8 +203,8 @@ export async function POST(
         }
 
         // 5. Accuse Select Menu
-        if (data.startsWith('accuse_menu:')) {
-          const caseId = data.replace('accuse_menu:', '');
+        if (data === 'acc_m' || data.startsWith('acc_m:') || data.startsWith('accuse_menu:')) {
+          const caseId = data.includes(':') ? data.split(':')[1] : null;
           const result = await handleHubRuntime({
             telegramId,
             username,
@@ -218,10 +218,10 @@ export async function POST(
         }
 
         // 6. Accuse Confirmation Prompt
-        if (data.startsWith('accuse_confirm:')) {
+        if (data.startsWith('acc_c:') || data.startsWith('accuse_confirm:')) {
           const parts = data.split(':');
-          const caseId = parts[1];
-          const accusedBotId = parts[2];
+          const accusedBotId = parts.length === 3 ? parts[2] : parts[1];
+          const caseId = parts.length === 3 ? parts[1] : null;
           const result = await handleHubRuntime({
             telegramId,
             username,
@@ -236,10 +236,10 @@ export async function POST(
         }
 
         // 7. Accuse Final Execution
-        if (data.startsWith('accuse_execute:')) {
+        if (data.startsWith('acc_x:') || data.startsWith('accuse_execute:')) {
           const parts = data.split(':');
-          const caseId = parts[1];
-          const accusedBotId = parts[2];
+          const accusedBotId = parts.length === 3 ? parts[2] : parts[1];
+          const caseId = parts.length === 3 ? parts[1] : null;
           const result = await handleHubRuntime({
             telegramId,
             username,
