@@ -165,7 +165,7 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
       // Accuse button
       suspectButtons.push({
         text: '⚖️ Предъявить обвинение (/accuse)',
-        callback_data: `accuse_menu:${targetCase.id}`,
+        callback_data: 'acc_m',
       });
 
       // Back to catalog button
@@ -337,7 +337,7 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
       let targetCase = caseId
         ? await prisma.group.findFirst({
             where: {
-              OR: [{ id: caseId }, { code: caseId }, { name: caseId }],
+              OR: [{ id: caseId }, { code: caseId }],
             },
             include: {
               bots: {
@@ -424,7 +424,7 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
 
       let unlockedCase = caseId
         ? await prisma.group.findFirst({
-            where: { OR: [{ id: caseId }, { code: caseId }, { name: caseId }] },
+            where: { OR: [{ id: caseId }, { code: caseId }] },
             include: {
               bots: {
                 where: { isActive: true },
@@ -465,7 +465,7 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
       const caseIdToUse = caseId || user.activeCaseId;
       let targetCase = caseIdToUse
         ? await prisma.group.findFirst({
-            where: { OR: [{ id: caseIdToUse }, { code: caseIdToUse }, { name: caseIdToUse }] },
+            where: { OR: [{ id: caseIdToUse }, { code: caseIdToUse }] },
             include: { bots: { where: { isActive: true }, orderBy: { orderIndex: 'asc' } } },
           })
         : null;
@@ -515,10 +515,16 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
     if (action === 'accuse_execute' || action === 'submit_accusation') {
       const caseIdToUse = caseId || user.activeCaseId;
       let targetCase = caseIdToUse
+        ? await prisma.group.findFirst({
+            where: { OR: [{ id: caseIdToUse }, { code: caseIdToUse }] },
+            include: { bots: { where: { isActive: true }, orderBy: { orderIndex: 'asc' } } },
+          })
+        : null;
+
       if (!targetCase) {
         targetCase = await prisma.group.findFirst({
           where: { status: 'ACTIVE' },
-          include: { bots: true },
+          include: { bots: { where: { isActive: true }, orderBy: { orderIndex: 'asc' } } },
         });
       }
 
@@ -526,7 +532,14 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
         return { success: false, error: 'Дело не найдено' };
       }
 
-      const accusedBot = targetCase.bots.find((b: any) => b.id === accusedBotId);
+      let accusedBot = targetCase.bots.find((b: any) => b.id === accusedBotId || b.botId === accusedBotId);
+      if (!accusedBot) {
+        const idx = parseInt(String(accusedBotId).replace('bot_', '')) - 1;
+        if (!isNaN(idx) && targetCase.bots[idx]) {
+          accusedBot = targetCase.bots[idx];
+        }
+      }
+
       const isActualKiller = accusedBot?.isGuilty || (targetCase.isGuiltyBotId && accusedBot?.id === targetCase.isGuiltyBotId);
 
       const defaultWinText = `🎉 *ДЕЛО РАСКРЫТО! БЛЕСТЯЩАЯ ПОБЕДА!*
@@ -575,6 +588,8 @@ ${accusedBot?.name || 'Преступник'} идёт в наручниках �
         accusedBotName: accusedBot?.name,
         text: verdictText,
         buttons: [
+          { text: '📁 Материалы дела', callback_data: `case:${targetCase.id}` },
+          { text: '⚖️ Обвинить другого (/accuse)', callback_data: 'acc_m' },
           { text: '📂 Архив расследований (/cases)', callback_data: 'hub:cases' },
         ],
       };
