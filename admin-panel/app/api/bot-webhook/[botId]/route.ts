@@ -272,7 +272,7 @@ export async function POST(
         }
 
         // 2. /cases or /menu command
-        if (text === '/cases' || text === '/menu') {
+        if (text === '/cases' || text.startsWith('/cases@') || text.startsWith('/cases') || text === '/menu') {
           const result = await handleHubRuntime({
             telegramId,
             username,
@@ -285,7 +285,7 @@ export async function POST(
         }
 
         // 3. /accuse command
-        if (text === '/accuse') {
+        if (text === '/accuse' || text.startsWith('/accuse@') || text.startsWith('/accuse') || text.toLowerCase() === 'обвинить' || text.toLowerCase() === 'предъявить обвинение') {
           const result = await handleHubRuntime({
             telegramId,
             username,

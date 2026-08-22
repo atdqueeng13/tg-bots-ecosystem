@@ -99,6 +99,8 @@ async function processUpdate(bot: any, update: any) {
 
   if (!fromUser || !chatId) return;
 
+  console.log(`📩 [${bot.name}] Received update from @${fromUser.username || fromUser.id}:`, message?.text || callbackQuery?.data);
+
   const telegramId = String(fromUser.id);
   const username = fromUser.username ? `@${fromUser.username}` : null;
   const firstName = fromUser.first_name || null;
@@ -160,12 +162,12 @@ async function processUpdate(bot: any, update: any) {
         await dispatchHubResponse(bot.token, chatId, result);
         return;
       }
-      if (text === '/cases' || text === '/menu') {
+      if (text === '/cases' || text.startsWith('/cases@') || text.startsWith('/cases') || text === '/menu') {
         const result = await handleHubRuntime({ telegramId, username, firstName, lastName, action: 'cases' });
         await dispatchHubResponse(bot.token, chatId, result);
         return;
       }
-      if (text === '/accuse') {
+      if (text === '/accuse' || text.startsWith('/accuse@') || text.startsWith('/accuse') || text.toLowerCase() === 'обвинить' || text.toLowerCase() === 'предъявить обвинение') {
         const result = await handleHubRuntime({ telegramId, username, firstName, lastName, action: 'accuse_select' });
         await dispatchHubResponse(bot.token, chatId, result);
         return;
