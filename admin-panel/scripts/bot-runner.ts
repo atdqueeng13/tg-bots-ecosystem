@@ -197,20 +197,11 @@ async function processUpdate(bot: any, update: any) {
     });
 
     const replyText = result.botResponse || 'Я слушаю вас, детектив.';
-    const chunks = splitMessage(replyText);
-    for (let i = 0; i < chunks.length; i++) {
-      const isLast = i === chunks.length - 1;
+    for (const chunk of splitMessage(replyText)) {
       await telegramCall(bot.token, 'sendMessage', {
         chat_id: chatId,
-        text: chunks[i],
+        text: chunk,
         parse_mode: 'Markdown',
-        reply_markup: isLast
-          ? {
-              inline_keyboard: [
-                [{ text: '🕵️‍♂️ Вернуться в Главный Хаб к Шефу', url: 'https://t.me/sherlock_main_bot' }],
-              ],
-            }
-          : undefined,
       });
     }
   }
