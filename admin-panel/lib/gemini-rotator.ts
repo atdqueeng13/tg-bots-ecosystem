@@ -93,13 +93,8 @@ export async function generateWithGemini(options: GenerateOptions) {
     temperature = 0.7,
   } = options;
 
-  // Map legacy model names to active Gemini 3.6 / 3.7 models
-  if (
-    modelName.includes('2.0') ||
-    modelName.includes('1.5') ||
-    modelName.includes('2.5') ||
-    modelName.includes('3.5')
-  ) {
+  // Always map all Gemini models to the rock-solid Gemini 3.6 Flash
+  if (modelName.includes('gemini') || !modelName) {
     modelName = 'gemini-3.6-flash';
   }
 
@@ -127,7 +122,7 @@ export async function generateWithGemini(options: GenerateOptions) {
       if (provider === 'gemini' || modelName.includes('gemini')) {
         const genAI = new GoogleGenerativeAI(key);
         const model = genAI.getGenerativeModel({
-          model: modelName,
+          model: 'gemini-3.6-flash',
           systemInstruction: systemPrompt || undefined,
           generationConfig: {
             temperature,
@@ -163,7 +158,7 @@ export async function generateWithGemini(options: GenerateOptions) {
 
         return {
           text,
-          modelUsed: modelName,
+          modelUsed: 'gemini-3.6-flash',
           latencyMs,
           tokensEstimate: Math.ceil((userPrompt.length + text.length) / 3.8),
         };
