@@ -184,8 +184,10 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
 
     // Helper: Build Accuse Selection Menu
     const handleAccuseSelect = async (targetCaseId?: string | null): Promise<HubRuntimeResult> => {
-      const activeCase = await prisma.group.findUnique({
-        where: { id: targetCaseId || user.activeCaseId || '' },
+      let caseToFind = targetCaseId || user.activeCaseId;
+      
+      let activeCase = caseToFind ? await prisma.group.findUnique({
+        where: { id: caseToFind },
         include: {
           bots: {
             where: { isActive: true },
@@ -193,14 +195,36 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
             orderBy: { orderIndex: 'asc' },
           },
         },
-      });
+      }) : null;
+
+      // Auto-fallback to the first active case in DB if activeCaseId wasn't saved yet
+      if (!activeCase) {
+        activeCase = await prisma.group.findFirst({
+          where: { status: 'ACTIVE' },
+          include: {
+            bots: {
+              where: { isActive: true },
+              select: { id: true, name: true, role: true, orderIndex: true },
+              orderBy: { orderIndex: 'asc' },
+            },
+          },
+        });
+      }
 
       if (!activeCase) {
         return {
           success: false,
-          text: '⚠️ *У вас нет активного расследования для обвинения.*\nСначала выберите дело из архива командой /cases.',
-          buttons: [{ text: '📂 Выбрать дело (/cases)', callback_data: 'hub:cases' }],
+          text: '⚠️ *Расследований пока нет в архиве.*\nДобавьте дело в панели администратора.',
+          buttons: [{ text: '📂 Обновить архив (/cases)', callback_data: 'hub:cases' }],
         };
+      }
+
+      // Update user activeCaseId
+      if (user.activeCaseId !== activeCase.id) {
+        await prisma.telegramUser.update({
+          where: { id: user.id },
+          data: { activeCaseId: activeCase.id, stage: 'INVESTIGATING' },
+        });
       }
 
       const text = `⚖️ *ПРЕДЪЯВЛЕНИЕ ОБВИНЕНИЯ*\nДело: «${activeCase.title}»\n\nКого из подозреваемых вы считаете настоящим убийцей? Выберите персонажа для суда:`;
@@ -399,10 +423,20 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
 
     // --- 7. ACTION: ACCUSE CONFIRM ---
     if (action === 'accuse_confirm') {
-      const targetCase = await prisma.group.findUnique({
-        where: { id: caseId || user.activeCaseId || '' },
-        include: { bots: true },
-      });
+      const caseIdToUse = caseId || user.activeCaseId;
+      let targetCase = caseIdToUse
+        ? await prisma.group.findUnique({
+            where: { id: caseIdToUse },
+            include: { bots: true },
+          })
+        : null;
+
+      if (!targetCase) {
+        targetCase = await prisma.group.findFirst({
+          where: { status: 'ACTIVE' },
+          include: { bots: true },
+        });
+      }
 
       if (!targetCase) {
         return { success: false, error: 'Дело не найдено' };
@@ -433,10 +467,20 @@ export async function handleHubRuntime(params: HubRuntimeParams): Promise<HubRun
 
     // --- 8. ACTION: ACCUSE EXECUTE (FINAL DETERMINISTIC VERDICT) ---
     if (action === 'accuse_execute' || action === 'submit_accusation') {
-      const targetCase = await prisma.group.findUnique({
-        where: { id: caseId || user.activeCaseId || '' },
-        include: { bots: true },
-      });
+      const caseIdToUse = caseId || user.activeCaseId;
+      let targetCase = caseIdToUse
+        ? await prisma.group.findUnique({
+            where: { id: caseIdToUse },
+            include: { bots: true },
+          })
+        : null;
+
+      if (!targetCase) {
+        targetCase = await prisma.group.findFirst({
+          where: { status: 'ACTIVE' },
+          include: { bots: true },
+        });
+      }
 
       if (!targetCase) {
         return { success: false, error: 'Дело не найдено' };
